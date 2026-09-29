@@ -1,0 +1,165 @@
+{
+ "datesData": [
+  {
+   "id": "26602",
+   "isResult": true,
+   "h": {
+    "id": "87",
+    "title": "Liverpool",
+    "short_title": "LIV"
+   },
+   "a": {
+    "id": "73",
+    "title": "Bournemouth",
+    "short_title": "BOU"
+   },
+   "goals": {
+    "h": "4",
+    "a": "2"
+   },
+   "xG": {
+    "h": "2.53",
+    "a": "1.08"
+   },
+   "datetime": "2025-08-15 19:00:00",
+   "forecast": {
+    "w": "0.73",
+    "d": "0.17",
+    "l": "0.10"
+   }
+  },
+  {
+   "id": "26603",
+   "isResult": false,
+   "h": {
+    "id": "71",
+    "title": "Aston Villa",
+    "short_title": "AVL"
+   },
+   "a": {
+    "id": "86",
+    "title": "Newcastle United",
+    "short_title": "NEW"
+   },
+   "goals": {
+    "h": null,
+    "a": null
+   },
+   "xG": {
+    "h": null,
+    "a": null
+   },
+   "datetime": "2025-08-16 11:30:00"
+  }
+ ],
+ "teamsData": {
+  "87": {
+   "id": "87",
+   "title": "Liverpool",
+   "history": [
+    {
+     "h_a": "h",
+     "xG": 2.53,
+     "xGA": 1.08,
+     "npxG": 2.53,
+     "npxGA": 1.08,
+     "ppda": {
+      "att": 250,
+      "def": 25
+     },
+     "ppda_allowed": {
+      "att": 180,
+      "def": 30
+     },
+     "deep": 12,
+     "deep_allowed": 4,
+     "scored": 4,
+     "missed": 2,
+     "xpts": 2.3,
+     "result": "w",
+     "date": "2025-08-15 19:00:00",
+     "wins": 1,
+     "draws": 0,
+     "loses": 0,
+     "pts": 3,
+     "npxGD": 1.45
+    }
+   ]
+  },
+  "73": {
+   "id": "73",
+   "title": "Bournemouth",
+   "history": [
+    {
+     "h_a": "a",
+     "xG": 1.08,
+     "xGA": 2.53,
+     "npxG": 1.08,
+     "npxGA": 2.53,
+     "ppda": {
+      "att": 180,
+      "def": 30
+     },
+     "ppda_allowed": {
+      "att": 250,
+      "def": 25
+     },
+     "deep": 4,
+     "deep_allowed": 12,
+     "scored": 2,
+     "missed": 4,
+     "xpts": 0.4,
+     "result": "l",
+     "date": "2025-08-15 19:00:00",
+     "wins": 0,
+     "draws": 0,
+     "loses": 1,
+     "pts": 0,
+     "npxGD": -1.45
+    }
+   ]
+  }
+ },
+ "playersData": [
+  {
+   "id": "1250",
+   "player_name": "Mohamed Salah",
+   "games": "1",
+   "time": "90",
+   "goals": "1",
+   "xG": "0.61",
+   "assists": "1",
+   "xA": "0.30",
+   "shots": "4",
+   "key_passes": "2",
+   "yellow_cards": "0",
+   "red_cards": "0",
+   "position": "F M",
+   "team_title": "Liverpool",
+   "npg": "1",
+   "npxG": "0.61",
+   "xGChain": "1.2",
+   "xGBuildup": "0.3"
+  },
+  {
+   "id": "8260",
+   "player_name": "Antoine Semenyo",
+   "games": "1",
+   "time": "90",
+   "goals": "2",
+   "xG": "0.72",
+   "assists": "0",
+   "xA": "0.05",
+   "shots": "3",
+   "key_passes": "1",
+   "yellow_cards": "0",
+   "red_cards": "0",
+   "position": "F M S",
+   "team_title": "Bournemouth",
+   "npg": "2",
+   "npxG": "0.72",
+   "xGChain": "0.8",
+   "xGBuildup": "0.1"
+  }
+ ]
+}
