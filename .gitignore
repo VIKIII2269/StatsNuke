@@ -1,0 +1,21 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Local data (never commit the lake or caches)
+/lake/
+/.cache/
+mlruns/
+
+# Secrets
+.env

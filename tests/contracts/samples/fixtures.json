@@ -1,0 +1,51 @@
+[
+ {
+  "id": 1,
+  "code": 2610001,
+  "event": 1,
+  "kickoff_time": "2026-08-21T19:00:00Z",
+  "team_h": 1,
+  "team_a": 7,
+  "team_h_score": 2,
+  "team_a_score": 0,
+  "started": true,
+  "finished": true,
+  "finished_provisional": true,
+  "minutes": 90,
+  "provisional_start_time": false,
+  "team_h_difficulty": 3,
+  "team_a_difficulty": 5,
+  "pulse_id": 1,
+  "stats": [
+   {
+    "identifier": "goals_scored",
+    "a": [],
+    "h": [
+     {
+      "value": 1,
+      "element": 3
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": 25,
+  "code": 2610025,
+  "event": null,
+  "kickoff_time": null,
+  "team_h": 7,
+  "team_a": 1,
+  "team_h_score": null,
+  "team_a_score": null,
+  "started": false,
+  "finished": false,
+  "finished_provisional": false,
+  "minutes": 0,
+  "provisional_start_time": true,
+  "team_h_difficulty": 5,
+  "team_a_difficulty": 3,
+  "pulse_id": 25,
+  "stats": []
+ }
+]

@@ -1,0 +1,5 @@
+# Player-fixture rows excused from the exact-match golden gate.
+# Every entry needs a reason and a human review; never add entries to make CI green.
+# Format:
+# - {season: "2025/26", element: 123, fixture: 456, reason: "FPL manual points correction, see <link>"}
+[]

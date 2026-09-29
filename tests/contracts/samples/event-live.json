@@ -1,0 +1,33 @@
+{
+ "elements": [
+  {
+   "id": 1,
+   "stats": {
+    "minutes": 90,
+    "goals_scored": 0,
+    "assists": 0,
+    "clean_sheets": 1,
+    "goals_conceded": 0,
+    "saves": 2,
+    "bonus": 0,
+    "bps": 24,
+    "total_points": 6,
+    "in_dreamteam": false
+   },
+   "explain": [
+    {
+     "fixture": 1,
+     "stats": [
+      {
+       "identifier": "minutes",
+       "points": 2,
+       "value": 90,
+       "points_modification": 0
+      }
+     ]
+    }
+   ],
+   "modified": false
+  }
+ ]
+}
