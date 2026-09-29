@@ -1,0 +1,86 @@
+# Stopgap scheduler for the irrecoverable FPL snapshots (ARCHITECTURE.md §5.3.2, §12.4).
+#
+# Scheduled workflows only run from the default branch, so this goes live once merged to
+# main. Actions cron can start late under load; move deadline-critical jobs to the VPS
+# before live operation (Phase 6).
+#
+# Storage: if the FPLH_LAKE_URI secret is set (e.g. s3://statsnuke-lake with
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_ENDPOINT_URL secrets for R2), the lake is
+# written there. Otherwise new objects are appended to the `data-bronze` branch.
+name: Collect
+
+on:
+  schedule:
+    - cron: "17 */3 * * *" # bootstrap-static + fixtures every 3 h
+    - cron: "47 * * * *" # hourly; stored only within 24 h of a deadline
+    - cron: "43 9 * * *" # daily after 09:00 UK lockdown: latest finalised GW, once
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which collection to run
+        type: choice
+        options: [snapshot, deadline-hourly, post-gw]
+        default: snapshot
+      gw:
+        description: "post-gw only: gameweek (default: latest finalised, if not yet pulled)"
+        required: false
+
+permissions:
+  contents: write # push to the data-bronze branch
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FPLH_LAKE_URI: ${{ secrets.FPLH_LAKE_URI || 'lake' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --no-dev --extra s3
+
+      - name: Pick job
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_JOB: ${{ inputs.job }}
+        run: |
+          case "$EVENT:$SCHEDULE" in
+            workflow_dispatch:*) job="$INPUT_JOB" ;;
+            "schedule:17 */3 * * *") job=snapshot ;;
+            "schedule:47 * * * *") job=deadline-hourly ;;
+            "schedule:43 9 * * *") job=post-gw ;;
+            *) echo "unknown trigger $EVENT:$SCHEDULE" >&2; exit 1 ;;
+          esac
+          echo "job=$job" >> "$GITHUB_OUTPUT"
+
+      - name: Restore collector state from data branch
+        if: env.FPLH_LAKE_URI == 'lake'
+        run: scripts/restore_state_from_branch.sh lake data-bronze
+
+      - name: Collect
+        env:
+          JOB: ${{ steps.pick.outputs.job }}
+          GW: ${{ inputs.gw }}
+        run: |
+          case "$JOB" in
+            snapshot) uv run --no-sync fplh collect fpl-snapshot --with-fixtures ;;
+            deadline-hourly) uv run --no-sync fplh collect fpl-snapshot --only-within-hours 24 ;;
+            post-gw) uv run --no-sync fplh collect fpl-post-gw ${GW:+--gw "$GW"} ;;
+          esac
+
+      # Runs even if collection failed part-way, so successful requests are kept.
+      - name: Persist to data branch
+        if: always() && env.FPLH_LAKE_URI == 'lake'
+        run: scripts/persist_to_branch.sh lake data-bronze
