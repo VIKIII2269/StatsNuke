@@ -111,7 +111,12 @@ class HttpClient:
         base = self._backoff_initial * 2 ** (state.attempt_number - 1)
         return float(min(self._backoff_max, base + random.uniform(0, self._backoff_initial)))
 
-    async def get(self, url: str, params: dict[str, str] | None = None) -> httpx.Response:
+    async def get(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
             wait=self._wait,
@@ -120,7 +125,7 @@ class HttpClient:
         ):
             with attempt:
                 await self._limiter.acquire()
-                response = await self._client.get(url, params=params)
+                response = await self._client.get(url, params=params, headers=headers)
                 if response.status_code in RETRYABLE_STATUS:
                     raise RetryableStatusError(response)
                 return response

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,6 +24,8 @@ class Settings(BaseSettings):
     cache_dir: Path = REPO_ROOT / ".cache"
     user_agent: str = "StatsNuke-fplh/0.1 (+https://github.com/vikiii2269/statsnuke)"
     http_timeout_s: float = 30.0
+    odds_api_key: SecretStr | None = None  # FPLH_ODDS_API_KEY; never logged or stored
+    odds_monthly_credits: int = 500
 
 
 def get_settings() -> Settings:

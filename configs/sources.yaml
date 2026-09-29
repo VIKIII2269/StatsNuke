@@ -16,6 +16,7 @@ sources:
     cadence: "three updates per season"
     notes: "xP may contain post-match information: never use it as a feature (§5.3.1)"
   understat:
+    base_url: "https://understat.com"
     requests_per_second: 0.5
     max_concurrency: 1
     publication_lag_hours: 24
