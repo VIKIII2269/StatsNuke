@@ -1,0 +1,6 @@
+# Manual player links, applied last (they always win). Each entry:
+#   - {code: <FPL code>, understat_player_id: <id>, reason: "..."}          # link all seasons
+#   - {code: <FPL code>, season: "2021-22", understat_player_id: <id>, reason: "..."}
+#   - {code: <FPL code>, understat_player_id: null, reason: "..."}            # block a bad auto-link
+# Candidates needing a decision are written to gold/reports/entity_review_queue.csv.
+[]
