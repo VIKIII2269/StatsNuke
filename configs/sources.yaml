@@ -1,0 +1,34 @@
+# Data sources: endpoints, politeness limits, cadence and publication lags.
+# publication_lag_hours is the conservative ℓ_s used to set o_f = e_f + ℓ_s for
+# backfilled facts (ARCHITECTURE.md §6.2). Polled sources use the fetch time instead.
+sources:
+  fpl:
+    base_url: "https://fantasy.premierleague.com/api"
+    requests_per_second: 2.0
+    max_concurrency: 4
+    publication_lag_hours: 33   # finalised at 09:00 UK the day after the last match (≤ ~33 h)
+    cadence: "bootstrap every 3 h; hourly within 24 h of a deadline; post-GW after lockdown"
+  vaastav:
+    base_url: "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data"
+    requests_per_second: 1.0
+    max_concurrency: 2
+    publication_lag_hours: 33
+    cadence: "three updates per season"
+    notes: "xP may contain post-match information: never use it as a feature (§5.3.1)"
+  understat:
+    requests_per_second: 0.5
+    max_concurrency: 1
+    publication_lag_hours: 24
+    cadence: "daily, morning after matches (Phase 1)"
+  football_data:
+    base_url: "https://www.football-data.co.uk/mmz4281"
+    requests_per_second: 0.5
+    max_concurrency: 1
+    publication_lag_hours: 48
+    cadence: "weekly (Phase 1)"
+    notes: "Closing odds are known only at kickoff and are never pre-deadline features"
+  odds_api:
+    base_url: "https://api.the-odds-api.com/v4"
+    requests_per_second: 1.0
+    max_concurrency: 1
+    cadence: "credit-budgeted: closing snapshot per kickoff slot first (Phase 1)"
