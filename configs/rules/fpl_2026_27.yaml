@@ -1,0 +1,40 @@
+# FPL scoring rules, 2026/27.
+#
+# Verification: reproduces official total_points exactly for every finalised 2026/27
+# player-fixture row available so far (vaastav GW1: 610 rows, zero mismatches). Extend
+# the check with our own post-GW pulls as gameweeks finalise.
+# goal.GK: official rules page; not yet identified by data (see fpl_2025_26.yaml).
+season: "2026/27"
+appearance:        {lt_60: 1, gte_60: 2}
+goal:              {GK: 10, DEF: 6, MID: 5, FWD: 4}
+assist:            3
+clean_sheet:       {GK: 4, DEF: 4, MID: 1, FWD: 0, min_minutes: 60}
+goals_conceded:    {GK: {per: 2, points: -1}, DEF: {per: 2, points: -1}}   # only while on pitch
+saves:             {per: 3, points: 1}
+penalty_save:      5
+penalty_miss:      -2
+yellow_card:       -1
+red_card:          -3
+own_goal:          -2
+defensive_contribution:
+  DEF:     {actions: [clearance, block, interception, tackle], threshold: 10, points: 2}
+  MID_FWD: {actions: [clearance, block, interception, tackle, recovery], threshold: 12, points: 2}
+  cap_per_match: 2
+bonus:             {ranks: [3, 2, 1], tie_rule: official}
+# 2026/27 Bonus Points System changes (ARCHITECTURE.md §5.4); used by M10 in Phase 3.
+bps:
+  tackled_penalty: 0            # previously -1 per time tackled
+  cbi: {per: 3, bps: 1}         # previously 1 BPS per 2 CBI
+  gk_save_inside_box: 3
+  gk_save_other: 2              # replaces "outside the box" = 2
+  gk_big_chance_saved: 1
+  penalty_save: 8               # 7 + 1 for big chance saved
+game:
+  squad: {GK: 2, DEF: 5, MID: 5, FWD: 3}
+  xi_min: {GK: 1, DEF: 3, MID: 2, FWD: 1}
+  max_per_club: 3
+  free_transfer_bank_max: 5
+  hit_cost: 4
+  free_transfers_preserved_on: [wildcard, free_hit]
+  chips: {sets: 2, per_set: [wildcard, free_hit, triple_captain, bench_boost], first_set_deadline_gw: 19}
+  lockdown: "D+1 09:00 Europe/London"
