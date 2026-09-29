@@ -14,15 +14,21 @@ Calibrated probabilistic forecasts for English Premier League matches and player
 
 ## Status
 
-Phase 0 (collect and score) is built:
+**Phase 0 (collect and score)** is merged: FPL snapshot and post-gameweek collectors, an append-only bronze lake, versioned scoring rules with a vectorised engine, and golden tests.
 
-- FPL snapshot and post-gameweek collectors writing an append-only **bronze** lake (local directory or any
-  fsspec URL, e.g. an R2/B2 bucket);
-- versioned per-season **scoring rules** with a vectorised rules engine and official bonus tie rule;
-- **golden tests** reproducing official FPL points exactly: all 29,747 player-fixtures of 2025/26 and every
-  finalised 2026/27 row available so far;
-- a GitHub Actions **stopgap scheduler**. It goes live once merged to `main`; see the
-  [going-live checklist](docs/IMPLEMENTATION_PLAN.md#04-going-live-actions-for-the-repo-owner).
+**Phase 1 (lake, entities, harness)** is built:
+
+- **backfills** for vaastav, football-data, Understat and The Odds API, the last within a monthly credit budget;
+- **silver tables** with point-in-time observation times, pandera contracts and quality gates;
+- **entity resolution** for teams, fixtures and players across sources;
+- a **point-in-time feature spine** with CI-blocking leakage tests;
+- **metrics**, gameweek-block bootstrap and Diebold–Mariano tests;
+- a **reproducible walk-forward runner** and the A0 baseline.
+
+Official FPL points are reproduced exactly for all 254,119 player-fixtures from 2016/17 to 2026/27.
+
+Real-data validation of football-data, Understat and odds is pending; see
+[the plan, §2.3](docs/IMPLEMENTATION_PLAN.md#23-not-yet-verified-on-real-data-blocked-hosts).
 
 ## Quickstart
 
@@ -35,6 +41,13 @@ uv run pytest                               # unit, contract, property, offline 
 # golden tests on full seasons
 uv run fplh golden fetch --season 2025/26 --season 2026/27
 uv run fplh golden check --season 2025/26
+
+# historical backfills → silver → evaluation
+uv run fplh backfill vaastav            # also: football-data, understat (add --current for this season only)
+uv run fplh silver build                # normalise, resolve entities, run quality gates, write
+uv run fplh golden check-silver         # official points reproduced for every season
+uv run fplh evaluate leakage --season 2024-25
+uv run fplh evaluate a0 --season 2024-25
 
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures
@@ -52,6 +65,7 @@ Settings are environment variables with the `FPLH_` prefix (see `src/fplh/settin
 | `FPLH_LAKE_URI` | `lake` | Lake root: a local path or an fsspec URL such as `s3://statsnuke-lake` |
 | `FPLH_USER_AGENT` | `StatsNuke-fplh/0.1 (+repo URL)` | Sent with every request |
 | `FPLH_HTTP_TIMEOUT_S` | `30` | Per-request timeout |
+| `FPLH_ODDS_API_KEY` | unset | The Odds API key (secret); odds collection is skipped without it |
 
 Bucket credentials come from the standard `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and
 `AWS_ENDPOINT_URL` variables. Never commit them.
@@ -60,7 +74,7 @@ Bucket credentials come from the standard `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCES
 
 ```text
 configs/            rules/fpl_<season>.yaml (scoring rules as data), sources.yaml (endpoints, rate limits, lags)
-src/fplh/           collectors/, lake/, rules/, cli.py; later phases add entities/, features/, models/, sim/, optimize/, evaluate/
+src/fplh/           collectors/, lake/ (bronze, silver/, quality), entities/, features/, evaluate/, models/, rules/, cli.py
 tests/              unit/, contracts/ (saved payloads), golden/ (official points), property/ (hypothesis)
 scripts/            golden sample builder; data-branch persistence for the stopgap scheduler
 .github/workflows/  ci.yml (lint, types, tests), collect.yml (scheduled collection)

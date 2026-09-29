@@ -122,3 +122,15 @@ def test_parse_key_roundtrip(lake: Lake) -> None:
         {"a": "1", "b": "2"},
     )
     assert latest_by_params(lake, "s", "e") == {(("a", "1"), ("b", "2")): key}
+
+
+def test_understat_recent_filter() -> None:
+    league = {
+        "datesData": [
+            {"id": "1", "isResult": True, "datetime": "2026-09-20 14:00:00"},
+            {"id": "2", "isResult": True, "datetime": "2026-09-28 14:00:00"},
+            {"id": "3", "isResult": False, "datetime": "2026-10-04 14:00:00"},
+        ]
+    }
+    assert understat.finished_match_ids(league) == [1, 2]
+    assert understat.finished_match_ids(league, since=datetime(2026, 9, 25, tzinfo=UTC)) == [2]

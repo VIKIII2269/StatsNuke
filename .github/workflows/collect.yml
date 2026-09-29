@@ -41,6 +41,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+      FPLH_ODDS_API_KEY: ${{ secrets.FPLH_ODDS_API_KEY }} # optional; odds calls are skipped without it
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -76,8 +77,17 @@ jobs:
         run: |
           case "$JOB" in
             snapshot) uv run --no-sync fplh collect fpl-snapshot --with-fixtures ;;
-            deadline-hourly) uv run --no-sync fplh collect fpl-snapshot --only-within-hours 24 ;;
-            post-gw) uv run --no-sync fplh collect fpl-post-gw ${GW:+--gw "$GW"} ;;
+            deadline-hourly)
+              uv run --no-sync fplh collect fpl-snapshot --only-within-hours 24
+              # Fires only when the credit-budget planner has a call due this hour.
+              uv run --no-sync fplh collect odds --due
+              ;;
+            post-gw)
+              uv run --no-sync fplh collect fpl-post-gw ${GW:+--gw "$GW"}
+              # Incremental history for the current season (cheap: a few requests).
+              uv run --no-sync fplh backfill understat --current --recent-days 4
+              uv run --no-sync fplh backfill football-data --current
+              ;;
           esac
 
       # Runs even if collection failed part-way, so successful requests are kept.

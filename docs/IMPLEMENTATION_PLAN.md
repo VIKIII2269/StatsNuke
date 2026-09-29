@@ -11,7 +11,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | Phase | Theme | Status |
 |---|---|---|
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
-| 1 | Lake, entities, walk-forward harness | Next |
+| 1 | Lake, entities, walk-forward harness | **Built**; real-data validation of football-data, Understat and odds waits on network access (§2.3) |
 | 2 | Team level (M1–M3, G0–G3) | Planned |
 | 3 | Match and player level (G4–G6, M4–M10, simulator) | Planned |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
@@ -108,24 +108,64 @@ These were found while planning. Each one changes how a later phase is built.
 
 Goal: every historical fact in silver with correct `o_f`, one identity per player, and a harness that can replay any deadline.
 
-| # | Ticket | Acceptance criteria |
-|---|---|---|
-| 1.1 | `collectors/csv_backfill.py`: football-data E0 (1993→) and E1 files into bronze | All seasons downloaded; closing-odds column availability report (gap 3) |
-| 1.2 | `collectors/vaastav.py`: `merged_gw.csv` + `players_raw.csv` 2016/17→ into bronze | Reuses `golden.py` normalisation; duplicate rule applied |
-| 1.3 | `collectors/understat.py`: league, match and shot data 2014/15→ | Rate ≤ 0.5 req/s; shot rows = sum of team shots per match |
-| 1.4 | `collectors/odds.py`: The Odds API with a credit budget planner | Planner unit-tested against the gap-7 priorities; never exceeds the monthly budget in simulation |
-| 1.5 | `collectors/fbref_events.py`: lineups, cards, substitutions | Contract tests on saved pages; decision on open question 2 recorded |
-| 1.6 | `lake/silver/`: normalisers to §6.3 tables with `pandera` schemas; `o_f` from polled time or `e_f + ℓ_s` | Silver fully rebuildable from bronze (rebuild twice → identical Parquet hashes) |
-| 1.7 | `entities/`: `dim_player` / `dim_team` / `dim_fixture` crosswalk (`rapidfuzz` token_set_ratio 92/80), review-queue CSV, `overrides.yaml` | Coverage gate ≥ 99.5 % of minutes mapped for every season |
-| 1.8 | `lake/quality.py`: conservation, cross-source goals, freshness, coverage checks | Failing check blocks downstream jobs (test with a corrupted fixture) |
-| 1.9 | `features/spine.py`: DuckDB `as_of(D)` view + `ASOF JOIN` spine | Feature builders receive only the filtered view (enforced by type) |
-| 1.10 | Leakage tests (`tests/leakage`): `max_observed_at ≤ D`; future-shuffle invariance | CI blocking |
-| 1.11 | `evaluate/metrics.py`: log loss, RPS, scoreline-grid log loss, Brier, ECE, randomised PIT, discrete CRPS | Each metric unit-tested against a hand-computed example |
-| 1.12 | `evaluate/bootstrap.py`: paired gameweek-block bootstrap; Diebold–Mariano (Newey–West) | Size check: A-vs-A comparisons reject at ≈ 5 % in simulation |
-| 1.13 | `evaluate/walk_forward.py` + `pred_run` manifest (§12.6) + MLflow (local file store) | A replayed run re-generates bit-identical outputs from bronze + manifest |
-| 1.14 | **A0 leaderboard**: market-only rates, naive minutes (last 3), raw per-90 | Logged for 2022/23–2024/25; becomes the baseline row for every later ablation |
+### 2.1 Tickets
 
-Exit: coverage gate passes; leakage tests green; A0 logged.
+| # | Ticket | Status | Where |
+|---|---|---|---|
+| 1.1 | football-data E0/E1 backfill + odds-column report | Built, mock-tested; **real run pending** | `collectors/football_data.py`, `lake/silver/football_data.py`, `fplh backfill football-data`, `fplh report odds-columns` |
+| 1.2 | vaastav backfill | **Built and run** (2016/17–2026/27) | `collectors/vaastav.py`, `lake/silver/vaastav.py`, `fplh backfill vaastav` |
+| 1.3 | Understat league + match backfill | Built, mock-tested; **real run pending** | `collectors/understat.py`, `lake/silver/understat.py`, `fplh backfill understat` |
+| 1.4 | The Odds API + credit budget planner | Built, mock-tested; live check needs `FPLH_ODDS_API_KEY` | `collectors/odds.py`, `collectors/odds_budget.py`, `fplh collect odds --due` |
+| 1.5 | FBref events | **Deferred to Phase 3** (user decision): lineups and minutes come from FPL, per-player subs and cards from Understat rosters | — |
+| 1.6 | Silver normalisers + pandera contracts | **Built**; rebuilds are byte-identical | `lake/silver/`, `fplh silver build` |
+| 1.7 | Entities (teams, fixtures, players) | **Built**; the player coverage gate needs Understat data | `entities/`, `configs/entities/` |
+| 1.8 | Quality gates | **Built**; each gate has a test that corrupts one fixture | `lake/quality.py` |
+| 1.9 | Information set + spine | **Built** | `features/information_set.py`, `features/spine.py`, `features/builders.py` |
+| 1.10 | Leakage tests | **Built**, CI-blocking; clean on real 2024/25 silver | `tests/leakage/`, `fplh evaluate leakage` |
+| 1.11 | Metrics | **Built** | `evaluate/metrics.py` |
+| 1.12 | Block bootstrap + Diebold–Mariano | **Built**; size ≈ 5 % | `evaluate/bootstrap.py` |
+| 1.13 | Walk-forward + manifests + tracking | **Built**; replays give the same run id and identical bytes | `evaluate/walk_forward.py`, `evaluate/manifest.py`, `evaluate/tracking.py` |
+| 1.14 | A0 leaderboard | **Player A0 logged** for 2022/23–2024/25 without market prices; the market-based version and match A0 wait on football-data | `models/baselines.py`, `models/market.py`, `evaluate/a0.py`, `fplh evaluate a0` |
+
+### 2.2 Results on real data (vaastav history)
+
+- **Silver build:** 254,119 player-match rows (2016/17–2026/27), 3,810 fixtures, 2,723 players. Goal conservation holds on **all 7,620 team-fixtures**.
+- **Golden gate extended to every season:** 2016/17–2024/25 rules configs added. `fplh golden check-silver` reproduces official `total_points` on **all 254,119 player-fixture rows, 11 seasons, 0 mismatches**.
+- **A0 player baseline** (walk-forward, horizon 1, league-average clean-sheet rates because no market data yet):
+
+| Season | MAE (all) | RMSE (all) | Spearman ρ within position (all) | MAE (played) | ρ (played) | Mean pred / actual |
+|---|---|---|---|---|---|---|
+| 2022/23 | 1.054 | 2.044 | 0.707 | 2.058 | 0.304 | 1.205 / 1.200 |
+| 2023/24 | 0.977 | 2.006 | 0.710 | 2.122 | 0.294 | 1.102 / 1.053 |
+| 2024/25 | 1.021 | 2.003 | 0.713 | 2.023 | 0.298 | 1.176 / 1.148 |
+
+"All" includes unused squad players, who are easy zeros. "Played" is the honest comparison row for later models.
+
+### 2.3 Not yet verified on real data (blocked hosts)
+
+The build environment's egress policy returns 403 for `www.football-data.co.uk`, `understat.com` and `api.the-odds-api.com`. Until they are allowed (environment settings → Network access), or the backfills run from GitHub Actions or the VPS, these Phase 1 criteria are verified only with mocks and synthetic data:
+
+1. the odds-column availability report (spec gap 3: are Pinnacle closing columns populated for 2025/26+?);
+2. Understat shot conservation and cross-source score agreement on real matches;
+3. the **≥ 99.5 % player coverage gate** (needs Understat rosters);
+4. the market-based A0 (player clean-sheet terms and the match-level A0 against closing odds).
+
+To finish, run: `fplh backfill football-data && fplh backfill understat && fplh silver build && fplh report odds-columns && fplh evaluate a0 --season 2022-23 --season 2023-24 --season 2024-25`. The Understat backfill takes about 3 h at 0.5 req/s. Any gate failure is investigated, not loosened.
+
+### 2.4 Findings from real data
+
+- **Open question 1 (historical defensive actions):** vaastav `merged_gw.csv` carries FPL's own `clearances_blocks_interceptions`, `recoveries` and `tackles` for **2016/17–2018/19** as well as 2025/26+. M7 therefore has four native seasons, not one, and 2025/26 can be a holdout for M7 after all. The only gap is 2019/20–2024/25. Before use, check the older counts against 2025/26 per-position distributions for definition drift.
+- **vaastav quirks**, each handled and counted in the build notes:
+  - before 2020/21 there is no `team`/`position` per row. Teams come from the fixture, never from `players_raw.team`, which is the end-of-season club;
+  - 2019/20 has 59 unplayed placeholder rows for postponed fixture 275 (GW29 → GW39);
+  - 2024/25 has 322 assistant-manager rows (position `AM`), which are dropped;
+  - 2021/22 labels 101 rows `GKP`;
+  - 2025/26 team IDs are not alphabetical, and 2026/27 `teams.csv` uses full club names (hence aliases).
+- **GK goal points:** 6 up to 2024/25, identified by data (Alisson, 2020/21). 10 from 2025/26, per the official rules page, still unidentified by data.
+- **Diebold–Mariano at season scale:** the textbook normal DM rejected 8.6 % of A-vs-A comparisons at 38 gameweeks. The implemented version (HLN correction, t critical values, NW truncation at h − 1) rejects ≈ 5 %.
+- **Name matching:** Unicode decomposition leaves `Ø`, `æ`, `ł` and similar letters intact, so they are transliterated explicitly (Ødegaard, Højbjerg, Fabiański).
+
+Exit: coverage gate passes; leakage tests green; A0 logged. **Leakage is green and player A0 is logged; the coverage gate and market A0 wait on §2.3.**
 
 ## 3. Phase 2: Team level
 

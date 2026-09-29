@@ -143,8 +143,12 @@ def collect_fpl_post_gw(
         lake.put_bytes(POST_GW_STATE_KEY, json.dumps(state).encode(), overwrite=True)
 
 
-def _seasons(first: int, seasons: list[int] | None) -> tuple[list[int], int]:
+def _seasons(
+    first: int, seasons: list[int] | None, current_only: bool = False
+) -> tuple[list[int], int]:
     current = season_start_year(SystemClock().now())
+    if current_only:
+        return [current], current
     return (seasons or list(range(first, current + 1))), current
 
 
@@ -170,36 +174,45 @@ def _backfill(source: str, specs: list[FileSpec], lake: Lake | None = None) -> B
 SeasonsOpt = Annotated[
     list[int] | None, typer.Option("--season", help="Season start year(s); default: all.")
 ]
+CurrentOpt = Annotated[bool, typer.Option("--current", help="Only the current season.")]
 
 
 @backfill_app.command("vaastav")
-def backfill_vaastav(season: SeasonsOpt = None) -> None:
+def backfill_vaastav(season: SeasonsOpt = None, current: CurrentOpt = False) -> None:
     """FPL history 2016/17→ from vaastav/Fantasy-Premier-League."""
-    seasons, current = _seasons(vaastav.FIRST_SEASON, season)
+    seasons, current_year = _seasons(vaastav.FIRST_SEASON, season, current)
     base = load_sources()["vaastav"].base_url or vaastav.DEFAULT_BASE
-    _backfill(vaastav.SOURCE, vaastav.vaastav_specs(seasons, current, base))
+    _backfill(vaastav.SOURCE, vaastav.vaastav_specs(seasons, current_year, base))
 
 
 @backfill_app.command("football-data")
-def backfill_football_data(season: SeasonsOpt = None) -> None:
+def backfill_football_data(season: SeasonsOpt = None, current: CurrentOpt = False) -> None:
     """Results, match stats and odds (E0, E1) 1993/94→ from football-data.co.uk."""
-    seasons, current = _seasons(football_data.FIRST_SEASON, season)
+    seasons, current_year = _seasons(football_data.FIRST_SEASON, season, current)
     base = load_sources()["football_data"].base_url or football_data.DEFAULT_BASE
-    _backfill(football_data.SOURCE, football_data.football_data_specs(seasons, current, base=base))
+    specs = football_data.football_data_specs(seasons, current_year, base=base)
+    _backfill(football_data.SOURCE, specs)
 
 
 @backfill_app.command("understat")
 def backfill_understat(
     season: SeasonsOpt = None,
+    current: CurrentOpt = False,
     matches: Annotated[bool, typer.Option(help="Also fetch per-match data.")] = True,
+    recent_days: Annotated[
+        int | None, typer.Option(help="Only matches played in the last N days.")
+    ] = None,
 ) -> None:
     """League data, then every finished match not yet in bronze (incremental)."""
-    seasons, current = _seasons(understat.FIRST_SEASON, season)
+    from datetime import timedelta
+
+    seasons, current_year = _seasons(understat.FIRST_SEASON, season, current)
     base = load_sources()["understat"].base_url or understat.DEFAULT_BASE
     lake = Lake(get_settings().lake_uri)
-    _backfill(understat.SOURCE, understat.league_specs(seasons, current, base), lake)
+    _backfill(understat.SOURCE, understat.league_specs(seasons, current_year, base), lake)
     if matches:
-        _backfill(understat.SOURCE, understat.match_specs(lake, base), lake)
+        since = SystemClock().now() - timedelta(days=recent_days) if recent_days else None
+        _backfill(understat.SOURCE, understat.match_specs(lake, base, since=since), lake)
 
 
 @collect_app.command("odds")
