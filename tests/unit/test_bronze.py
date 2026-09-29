@@ -113,3 +113,9 @@ def test_list_ignores_temp_files(lake: Lake) -> None:
 def test_meta_sidecar_is_json(lake: Lake) -> None:
     key = write_bronze(lake, rec())
     assert json.loads(lake.get_bytes(meta_key(key)))["bytes"] == len(rec().payload)
+
+
+def test_interrupted_write_is_ignored(lake: Lake) -> None:
+    key = write_bronze(lake, rec())
+    lake.fs.rm(lake.path(meta_key(key)))  # crash between payload and sidecar
+    assert list_bronze(lake, "fpl", "bootstrap-static") == []

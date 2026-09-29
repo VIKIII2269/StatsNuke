@@ -197,6 +197,7 @@ def _resolve(
         for name in ("fact_shot", "fact_player_match_understat"):
             if not t.get(name, pd.DataFrame()).empty:
                 t[name]["fixture_uid"] = t[name]["understat_match_id"].map(uid_by_mid)
+        _align_understat_times(t, notes)
 
     t["dim_fixture"] = build_dim_fixture(t["fpl_fixture"], t["fd_match"], us_match)
     all_teams = set()
@@ -209,16 +210,23 @@ def _resolve(
     roster = t.get("fact_player_match_understat", pd.DataFrame())
     fpl_players = t["fpl_player_season"]
     if not pm.empty:
-        fpl_minutes = pm.groupby(["season", "team", "code"])["minutes"].sum().reset_index()
+        fpl_apps = pm[["season", "team", "code", "fixture_uid", "minutes"]]
         if not roster.empty:
-            us_minutes = roster.groupby(
-                ["season", "team", "understat_player_id"], as_index=False
-            ).agg(player_name=("player_name", "first"), minutes=("minutes", "sum"))
+            us_apps = roster[
+                ["season", "team", "understat_player_id", "player_name", "fixture_uid", "minutes"]
+            ]
         else:
-            us_minutes = pd.DataFrame(
-                columns=["season", "team", "understat_player_id", "player_name", "minutes"]
+            us_apps = pd.DataFrame(
+                columns=[
+                    "season",
+                    "team",
+                    "understat_player_id",
+                    "player_name",
+                    "fixture_uid",
+                    "minutes",
+                ]
             )
-        result = link_players(fpl_minutes, us_minutes, fpl_players, load_overrides())
+        result = link_players(fpl_apps, us_apps, fpl_players, load_overrides())
         t["player_link"] = result.links
         t["entity_review_queue"] = result.review
         t["entity_coverage"] = result.coverage
@@ -232,6 +240,29 @@ def _resolve(
                 lambda c: f"fpl:{int(c)}" if pd.notna(c) else pd.NA
             )
     return t
+
+
+def _align_understat_times(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:
+    """Understat timestamps are UTC but can lag FPL's after a reschedule (±1–4 h in 18 %
+    of 2016/17+ matches). For fixtures FPL knows, take event time from FPL's kickoff and
+    keep Understat's publication lag, so every source agrees on when a match happened."""
+    fpl = t.get("fpl_fixture", pd.DataFrame())
+    us = t["us_match"]
+    if fpl.empty:
+        return
+    kickoff = fpl.set_index("fixture_uid")["kickoff_at"]
+    lag = us["observed_at"] - us["event_at"]
+    fpl_time = us["fixture_uid"].map(kickoff)
+    moved = fpl_time.notna() & (fpl_time != us["event_at"])
+    notes["understat/event_time_aligned_to_fpl"] = int(moved.sum())
+    us["event_at"] = fpl_time.fillna(us["event_at"])
+    us["observed_at"] = us["event_at"] + lag
+    by_mid = us.set_index("understat_match_id")[["event_at", "observed_at"]]
+    for name in ("fact_shot", "fact_player_match_understat"):
+        df = t.get(name, pd.DataFrame())
+        if not df.empty:
+            df["event_at"] = df["understat_match_id"].map(by_mid["event_at"])
+            df["observed_at"] = df["understat_match_id"].map(by_mid["observed_at"])
 
 
 REPORT_TABLES = {"entity_review_queue", "entity_coverage"}

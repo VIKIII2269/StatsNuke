@@ -7,6 +7,7 @@ facts take their event time from the FPL kickoff in ``dim_fixture``.
 
 from __future__ import annotations
 
+import html
 import json
 from datetime import timedelta
 from typing import Any
@@ -101,7 +102,7 @@ def normalise_league(
             {
                 "season": season,
                 "understat_player_id": int(p.id),
-                "player_name": p.player_name,
+                "player_name": html.unescape(p.player_name),
                 "team_titles": p.team_title,
                 "position": p.position,
                 "games": _i(p.games),
@@ -139,8 +140,8 @@ def normalise_match(
                 "side": s.h_a,
                 "team": side_team[s.h_a],
                 "understat_player_id": int(s.player_id),
-                "player_name": s.player,
-                "assisted_by": s.player_assisted,
+                "player_name": html.unescape(s.player),
+                "assisted_by": html.unescape(s.player_assisted) if s.player_assisted else None,
                 "x": _f(s.X),
                 "y": _f(s.Y),
                 "xg": _f(s.xG),
@@ -159,7 +160,7 @@ def normalise_match(
                 "season": match["season"],
                 "understat_match_id": mid,
                 "understat_player_id": int(r.player_id),
-                "player_name": r.player,
+                "player_name": html.unescape(r.player),
                 "side": r.h_a,
                 "team": side_team[r.h_a],
                 "position": r.position,
