@@ -39,6 +39,8 @@ class BronzeRecord:
     payload: bytes
     params: dict[str, str] = field(default_factory=dict)
     content_type: str | None = None
+    # Allowlisted response headers worth keeping (e.g. API credit counters).
+    response_headers: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -85,6 +87,7 @@ def write_bronze(lake: Lake, rec: BronzeRecord) -> str:
         "url": rec.url,
         "http_status": rec.http_status,
         "content_type": rec.content_type,
+        "response_headers": rec.response_headers,
         "observed_at": isoformat_z(rec.observed_at),
         "observed_at_us": rec.observed_at.astimezone(UTC).isoformat(),
         "sha256": hashlib.sha256(rec.payload).hexdigest(),
@@ -110,3 +113,39 @@ def list_bronze(lake: Lake, source: str, endpoint: str) -> list[str]:
     """Payload keys for one source/endpoint, oldest observation first."""
     prefix = f"bronze/source={source}/endpoint={endpoint}"
     return [k for k in lake.list(prefix) if k.endswith(PAYLOAD_SUFFIX)]
+
+
+@dataclass(frozen=True)
+class BronzeKey:
+    source: str
+    endpoint: str
+    dt: str
+    observed_at: datetime
+    params: dict[str, str]
+
+
+def parse_key(key: str) -> BronzeKey:
+    """Inverse of :func:`bronze_key` for payload keys."""
+    parts = key.split("/")
+    if len(parts) != 5 or parts[0] != "bronze" or not key.endswith(PAYLOAD_SUFFIX):
+        raise ValueError(f"not a bronze payload key: {key}")
+    source = parts[1].removeprefix("source=")
+    endpoint = parts[2].removeprefix("endpoint=")
+    dt = parts[3].removeprefix("dt=")
+    name = parts[4][: -len(PAYLOAD_SUFFIX)]
+    obs, *kvs = name.split("__")
+    observed_at = datetime.strptime(obs.removeprefix("obs="), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=UTC
+    )
+    params = dict(kv.split("=", 1) for kv in kvs)
+    return BronzeKey(source, endpoint, dt, observed_at, params)
+
+
+def latest_by_params(
+    lake: Lake, source: str, endpoint: str
+) -> dict[tuple[tuple[str, str], ...], str]:
+    """Latest payload key per distinct parameter set (keys sort chronologically)."""
+    out: dict[tuple[tuple[str, str], ...], str] = {}
+    for key in list_bronze(lake, source, endpoint):
+        out[tuple(sorted(parse_key(key).params.items()))] = key
+    return out

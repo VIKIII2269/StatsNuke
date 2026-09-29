@@ -1,0 +1,75 @@
+# Team identity. football-data.co.uk names (E0 and E1) are canonical: a team's uid is
+# the slug of its football-data name (e.g. "Nott'm Forest" → nottm-forest).
+# Other sources' names must either slugify to a known uid or be listed as aliases here.
+# Unknown names fail the silver build with suggestions; add an alias, never guess.
+
+# EPL clubs since 2014/15 (used as the known set when football-data isn't loaded).
+canonical:
+  - Arsenal
+  - Aston Villa
+  - Bournemouth
+  - Brentford
+  - Brighton
+  - Burnley
+  - Cardiff
+  - Chelsea
+  - Coventry
+  - Crystal Palace
+  - Everton
+  - Fulham
+  - Huddersfield
+  - Hull
+  - Ipswich
+  - Leeds
+  - Leicester
+  - Liverpool
+  - Luton
+  - Man City
+  - Man United
+  - Middlesbrough
+  - Newcastle
+  - Norwich
+  - Nott'm Forest
+  - QPR
+  - Sheffield United
+  - Southampton
+  - Stoke
+  - Sunderland
+  - Swansea
+  - Tottenham
+  - Watford
+  - West Brom
+  - West Ham
+  - Wolves
+
+# other-source name → football-data name
+aliases:
+  # FPL
+  Man Utd: Man United
+  Spurs: Tottenham
+  Sheffield Utd: Sheffield United
+  Coventry City: Coventry
+  Hull City: Hull
+  Ipswich Town: Ipswich
+  # Understat
+  Manchester City: Man City
+  Manchester United: Man United
+  Newcastle United: Newcastle
+  Nottingham Forest: Nott'm Forest
+  Wolverhampton Wanderers: Wolves
+  West Bromwich Albion: West Brom
+  Queens Park Rangers: QPR
+  # The Odds API / long names
+  AFC Bournemouth: Bournemouth
+  Brighton and Hove Albion: Brighton
+  Brighton & Hove Albion: Brighton
+  Cardiff City: Cardiff
+  Huddersfield Town: Huddersfield
+  Leeds United: Leeds
+  Leicester City: Leicester
+  Luton Town: Luton
+  Norwich City: Norwich
+  Stoke City: Stoke
+  Swansea City: Swansea
+  Tottenham Hotspur: Tottenham
+  West Ham United: West Ham

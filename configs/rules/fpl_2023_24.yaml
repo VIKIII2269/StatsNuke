@@ -1,0 +1,34 @@
+# FPL scoring rules, 2023/24.
+#
+# Scoring verified by `fplh golden check-silver --season 2023-24` against every official
+# total_points row of the season (see docs/IMPLEMENTATION_PLAN.md). goal.GK = 6 is
+# identified by data (Alisson, 2020/21). No defensive-contribution points before 2025/26.
+# The `game` block (chips, transfer banking) is approximate for this season and must be
+# verified before Phase 4 season replays use it.
+season: "2023/24"
+appearance:        {lt_60: 1, gte_60: 2}
+goal:              {GK: 6, DEF: 6, MID: 5, FWD: 4}
+assist:            3
+clean_sheet:       {GK: 4, DEF: 4, MID: 1, FWD: 0, min_minutes: 60}
+goals_conceded:    {GK: {per: 2, points: -1}, DEF: {per: 2, points: -1}}   # only while on pitch
+saves:             {per: 3, points: 1}
+penalty_save:      5
+penalty_miss:      -2
+yellow_card:       -1
+red_card:          -3
+own_goal:          -2
+defensive_contribution:  # not scored before 2025/26
+  DEF:     {actions: [clearance, block, interception, tackle], threshold: 10, points: 0}
+  MID_FWD: {actions: [clearance, block, interception, tackle, recovery], threshold: 12, points: 0}
+  cap_per_match: 0
+bonus:             {ranks: [3, 2, 1], tie_rule: official}
+bps: {}
+game:
+  squad: {GK: 2, DEF: 5, MID: 5, FWD: 3}
+  xi_min: {GK: 1, DEF: 3, MID: 2, FWD: 1}
+  max_per_club: 3
+  free_transfer_bank_max: 2
+  hit_cost: 4
+  free_transfers_preserved_on: []
+  chips: {sets: 2, per_set: [wildcard, free_hit, triple_captain, bench_boost], first_set_deadline_gw: 19}
+  lockdown: "D+1 09:00 Europe/London"

@@ -1083,7 +1083,7 @@ The Phase 0 collector must go live first: every gameweek without snapshots is da
 
 ## 15. Open questions
 
-1. **Historical defensive-action components before 2025/26.** The candidate sources were assessed, and none is a drop-in backfill:
+1. **Historical defensive-action components before 2025/26.** *Update (Phase 1): FPL's own counts exist in vaastav for 2016/17–2018/19, leaving only 2019/20–2024/25 uncovered; see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) §2.4.* The candidate sources were assessed, and none is a drop-in backfill:
    - **StatsBomb Open Data:** free event data with the right action types, but EPL coverage is the 2015/16 season only (plus a partial 2003/04 release), and StatsBomb's event definitions differ from Opta's, which FPL uses. Useful for a definition-mapping study and role priors, not for backfilling 2016/17 to 2024/25.
    - **FBref:** historically the closest match (Opta definitions; per-player match logs including recoveries), but the advanced tables were removed in January 2026 after Stats Perform terminated the feed. Community archives exist but are mostly season-level aggregates, and reusing scraped Opta data is a licensing grey area.
    - **Sportmonks / TheStatsAPI:** paid APIs with per-player fixture statistics (tackles, interceptions, clearances, blocked shots). Recoveries and historical EPL depth depend on the plan and must be verified before buying.
