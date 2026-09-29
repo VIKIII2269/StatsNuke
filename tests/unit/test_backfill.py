@@ -68,7 +68,7 @@ async def test_backfill_reports_failures(lake: Lake) -> None:
 
 @respx.mock
 async def test_understat_two_stage(lake: Lake) -> None:
-    league = {"datesData": [{"id": "1", "isResult": True}, {"id": "2", "isResult": False}]}
+    league = {"dates": [{"id": "1", "isResult": True}, {"id": "2", "isResult": False}]}
     route = respx.get("https://u.test/getLeagueData/EPL/2025").mock(
         return_value=httpx.Response(200, json=league)
     )
@@ -126,7 +126,7 @@ def test_parse_key_roundtrip(lake: Lake) -> None:
 
 def test_understat_recent_filter() -> None:
     league = {
-        "datesData": [
+        "dates": [
             {"id": "1", "isResult": True, "datetime": "2026-09-20 14:00:00"},
             {"id": "2", "isResult": True, "datetime": "2026-09-28 14:00:00"},
             {"id": "3", "isResult": False, "datetime": "2026-10-04 14:00:00"},

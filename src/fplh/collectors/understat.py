@@ -3,9 +3,9 @@
 Understat serves JSON to its own pages from two endpoints (both need the
 ``X-Requested-With: XMLHttpRequest`` header):
 
-* ``/getLeagueData/EPL/{season_start_year}`` → ``datesData`` (fixtures, results, xG),
-  ``teamsData`` (per-match team history incl. PPDA) and ``playersData`` (season totals);
-* ``/getMatchData/{match_id}`` → ``match_info``, ``rostersData`` and ``shotsData``.
+* ``/getLeagueData/EPL/{season_start_year}`` → ``dates`` (fixtures, results, xG),
+  ``teams`` (per-match team history incl. PPDA) and ``players`` (season totals);
+* ``/getMatchData/{match_id}`` → ``rosters`` and ``shots`` (plus rendered ``tmpl`` HTML, ignored).
 
 Stage 1 refreshes league data; stage 2 fetches every finished match not yet in bronze.
 """
@@ -44,7 +44,7 @@ def league_specs(
 
 def finished_match_ids(league_payload: dict[str, Any], since: datetime | None = None) -> list[int]:
     out = []
-    for m in league_payload["datesData"]:
+    for m in league_payload["dates"]:
         if not m.get("isResult"):
             continue
         played = (

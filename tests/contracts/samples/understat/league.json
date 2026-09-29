@@ -1,7 +1,7 @@
 {
- "datesData": [
+ "dates": [
   {
-   "id": "26602",
+   "id": "28778",
    "isResult": true,
    "h": {
     "id": "87",
@@ -18,148 +18,199 @@
     "a": "2"
    },
    "xG": {
-    "h": "2.53",
-    "a": "1.08"
+    "h": "2.33007",
+    "a": "1.57303"
    },
    "datetime": "2025-08-15 19:00:00",
    "forecast": {
-    "w": "0.73",
-    "d": "0.17",
-    "l": "0.10"
+    "w": "0.5498",
+    "d": "0.2276",
+    "l": "0.2226"
    }
-  },
-  {
-   "id": "26603",
-   "isResult": false,
-   "h": {
-    "id": "71",
-    "title": "Aston Villa",
-    "short_title": "AVL"
-   },
-   "a": {
-    "id": "86",
-    "title": "Newcastle United",
-    "short_title": "NEW"
-   },
-   "goals": {
-    "h": null,
-    "a": null
-   },
-   "xG": {
-    "h": null,
-    "a": null
-   },
-   "datetime": "2025-08-16 11:30:00"
   }
  ],
- "teamsData": {
-  "87": {
-   "id": "87",
-   "title": "Liverpool",
-   "history": [
-    {
-     "h_a": "h",
-     "xG": 2.53,
-     "xGA": 1.08,
-     "npxG": 2.53,
-     "npxGA": 1.08,
-     "ppda": {
-      "att": 250,
-      "def": 25
-     },
-     "ppda_allowed": {
-      "att": 180,
-      "def": 30
-     },
-     "deep": 12,
-     "deep_allowed": 4,
-     "scored": 4,
-     "missed": 2,
-     "xpts": 2.3,
-     "result": "w",
-     "date": "2025-08-15 19:00:00",
-     "wins": 1,
-     "draws": 0,
-     "loses": 0,
-     "pts": 3,
-     "npxGD": 1.45
-    }
-   ]
-  },
+ "teams": {
   "73": {
    "id": "73",
    "title": "Bournemouth",
    "history": [
     {
      "h_a": "a",
-     "xG": 1.08,
-     "xGA": 2.53,
-     "npxG": 1.08,
-     "npxGA": 2.53,
+     "xG": 1.57303,
+     "xGA": 2.33007,
+     "npxG": 1.57303,
+     "npxGA": 2.33007,
      "ppda": {
-      "att": 180,
-      "def": 30
+      "att": 278,
+      "def": 24
      },
      "ppda_allowed": {
-      "att": 250,
-      "def": 25
+      "att": 149,
+      "def": 17
      },
-     "deep": 4,
-     "deep_allowed": 12,
+     "deep": 8,
+     "deep_allowed": 9,
      "scored": 2,
      "missed": 4,
-     "xpts": 0.4,
+     "xpts": 0.8954,
      "result": "l",
      "date": "2025-08-15 19:00:00",
      "wins": 0,
      "draws": 0,
      "loses": 1,
      "pts": 0,
-     "npxGD": -1.45
+     "npxGD": -0.7570400000000002
+    },
+    {
+     "h_a": "h",
+     "xG": 1.78462,
+     "xGA": 0.373367,
+     "npxG": 1.78462,
+     "npxGA": 0.373367,
+     "ppda": {
+      "att": 147,
+      "def": 25
+     },
+     "ppda_allowed": {
+      "att": 219,
+      "def": 21
+     },
+     "deep": 6,
+     "deep_allowed": 3,
+     "scored": 1,
+     "missed": 0,
+     "xpts": 2.5305999999999997,
+     "result": "w",
+     "date": "2025-08-23 14:00:00",
+     "wins": 1,
+     "draws": 0,
+     "loses": 0,
+     "pts": 3,
+     "npxGD": 1.411253
+    }
+   ]
+  },
+  "87": {
+   "id": "87",
+   "title": "Liverpool",
+   "history": [
+    {
+     "h_a": "h",
+     "xG": 2.33007,
+     "xGA": 1.57303,
+     "npxG": 2.33007,
+     "npxGA": 1.57303,
+     "ppda": {
+      "att": 149,
+      "def": 17
+     },
+     "ppda_allowed": {
+      "att": 278,
+      "def": 24
+     },
+     "deep": 9,
+     "deep_allowed": 8,
+     "scored": 4,
+     "missed": 2,
+     "xpts": 1.877,
+     "result": "w",
+     "date": "2025-08-15 19:00:00",
+     "wins": 1,
+     "draws": 0,
+     "loses": 0,
+     "pts": 3,
+     "npxGD": 0.7570400000000002
+    },
+    {
+     "h_a": "a",
+     "xG": 0.646559,
+     "xGA": 1.96342,
+     "npxG": 0.646559,
+     "npxGA": 1.96342,
+     "ppda": {
+      "att": 106,
+      "def": 14
+     },
+     "ppda_allowed": {
+      "att": 265,
+      "def": 22
+     },
+     "deep": 6,
+     "deep_allowed": 3,
+     "scored": 3,
+     "missed": 2,
+     "xpts": 0.39349999999999996,
+     "result": "w",
+     "date": "2025-08-25 19:00:00",
+     "wins": 1,
+     "draws": 0,
+     "loses": 0,
+     "pts": 3,
+     "npxGD": -1.3168609999999998
     }
    ]
   }
  },
- "playersData": [
+ "players": [
   {
-   "id": "1250",
-   "player_name": "Mohamed Salah",
-   "games": "1",
-   "time": "90",
-   "goals": "1",
-   "xG": "0.61",
-   "assists": "1",
-   "xA": "0.30",
-   "shots": "4",
-   "key_passes": "2",
-   "yellow_cards": "0",
-   "red_cards": "0",
-   "position": "F M",
-   "team_title": "Liverpool",
-   "npg": "1",
-   "npxG": "0.61",
-   "xGChain": "1.2",
-   "xGBuildup": "0.3"
-  },
-  {
-   "id": "8260",
-   "player_name": "Antoine Semenyo",
-   "games": "1",
-   "time": "90",
-   "goals": "2",
-   "xG": "0.72",
+   "id": "11504",
+   "player_name": "Eli Junior Kroupi",
+   "games": "33",
+   "time": "1708",
+   "goals": "13",
+   "xG": "8.849121669307351",
    "assists": "0",
-   "xA": "0.05",
-   "shots": "3",
-   "key_passes": "1",
-   "yellow_cards": "0",
+   "xA": "1.81576990429312",
+   "shots": "52",
+   "key_passes": "22",
+   "yellow_cards": "5",
    "red_cards": "0",
    "position": "F M S",
    "team_title": "Bournemouth",
-   "npg": "2",
-   "npxG": "0.72",
-   "xGChain": "0.8",
-   "xGBuildup": "0.1"
+   "npg": "11",
+   "npxG": "7.326783983036876",
+   "xGChain": "11.65668847411871",
+   "xGBuildup": "5.08306846767664"
+  },
+  {
+   "id": "8995",
+   "player_name": "Hugo Ekitike",
+   "games": "28",
+   "time": "1835",
+   "goals": "11",
+   "xG": "11.932188130915165",
+   "assists": "4",
+   "xA": "2.49130567535758",
+   "shots": "65",
+   "key_passes": "21",
+   "yellow_cards": "0",
+   "red_cards": "0",
+   "position": "F S",
+   "team_title": "Liverpool",
+   "npg": "11",
+   "npxG": "11.932188130915165",
+   "xGChain": "16.322998896241188",
+   "xGBuildup": "4.886437067762017"
+  },
+  {
+   "id": "1250",
+   "player_name": "Mohamed Salah",
+   "games": "27",
+   "time": "2163",
+   "goals": "7",
+   "xG": "8.837686643004417",
+   "assists": "7",
+   "xA": "6.428150682710111",
+   "shots": "67",
+   "key_passes": "49",
+   "yellow_cards": "1",
+   "red_cards": "0",
+   "position": "F M S",
+   "team_title": "Liverpool",
+   "npg": "6",
+   "npxG": "8.076517805457115",
+   "xGChain": "17.373253114521503",
+   "xGBuildup": "6.297699823975563"
   }
  ]
 }

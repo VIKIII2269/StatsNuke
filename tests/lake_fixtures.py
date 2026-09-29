@@ -212,7 +212,7 @@ def understat_payloads() -> tuple[dict[str, Any], dict[int, dict[str, Any]]]:
                         "lastAction": "Pass",
                     }
                 )
-        matches[mid] = {"match_info": {"id": str(mid)}, "rostersData": rosters, "shotsData": shots}
+        matches[mid] = {"rosters": rosters, "shots": shots}
     teams_data = {
         us_team[t][0]: {"id": us_team[t][0], "title": us_team[t][1], "history": []} for t in (1, 2)
     }
@@ -235,7 +235,7 @@ def understat_payloads() -> tuple[dict[str, Any], dict[int, dict[str, Any]]]:
         }
         for p in PLAYERS
     ]
-    return {"datesData": dates, "teamsData": teams_data, "playersData": players_data}, matches
+    return {"dates": dates, "teams": teams_data, "players": players_data}, matches
 
 
 def build_mini_lake(

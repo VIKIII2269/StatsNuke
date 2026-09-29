@@ -76,9 +76,9 @@ class PlayerSeason(_Open):
 
 
 class LeagueData(_Open):
-    datesData: list[DateEntry]
-    teamsData: dict[str, TeamSeason]
-    playersData: list[PlayerSeason]
+    dates: list[DateEntry]
+    teams: dict[str, TeamSeason]
+    players: list[PlayerSeason]
 
 
 class Shot(_Open):
@@ -121,6 +121,5 @@ class RosterEntry(_Open):
 
 
 class MatchData(_Open):
-    match_info: dict[str, object]
-    rostersData: dict[str, dict[str, RosterEntry]]
-    shotsData: dict[str, list[Shot]]
+    rosters: dict[str, dict[str, RosterEntry]]
+    shots: dict[str, list[Shot]]

@@ -38,8 +38,8 @@ def normalise_league(
 ) -> dict[str, pd.DataFrame]:
     data = LeagueData.model_validate(json.loads(payload))
     season = season_label(start_year)
-    names = {d.h.title for d in data.datesData} | {d.a.title for d in data.datesData}
-    uid = teams.uids(names | {t.title for t in data.teamsData.values()})
+    names = {d.h.title for d in data.dates} | {d.a.title for d in data.dates}
+    uid = teams.uids(names | {t.title for t in data.teams.values()})
 
     matches = pd.DataFrame(
         [
@@ -57,7 +57,7 @@ def normalise_league(
                 "home_xg": _f(d.xG.h) if d.isResult else float("nan"),
                 "away_xg": _f(d.xG.a) if d.isResult else float("nan"),
             }
-            for d in data.datesData
+            for d in data.dates
         ]
     )
     matches = matches.astype({"home_goals": "Int64", "away_goals": "Int64"})
@@ -67,7 +67,7 @@ def normalise_league(
     matches["bronze_key"] = bronze_key
 
     team_rows = []
-    for t in data.teamsData.values():
+    for t in data.teams.values():
         for h in t.history:
             team_rows.append(
                 {
@@ -113,7 +113,7 @@ def normalise_league(
                 "shots": _i(p.shots),
                 "key_passes": _i(p.key_passes),
             }
-            for p in data.playersData
+            for p in data.players
         ]
     )
     return {"us_match": matches, "us_team_match": team_match, "us_player_season": players}
@@ -150,7 +150,7 @@ def normalise_match(
                 "last_action": s.lastAction,
             }
             for side in ("h", "a")
-            for s in data.shotsData.get(side, [])
+            for s in data.shots.get(side, [])
         ]
     )
     roster = pd.DataFrame(
@@ -177,7 +177,7 @@ def normalise_match(
                 "roster_out": _i(r.roster_out),
             }
             for side in ("h", "a")
-            for r in data.rostersData.get(side, {}).values()
+            for r in data.rosters.get(side, {}).values()
         ]
     )
     for df in (shots, roster):

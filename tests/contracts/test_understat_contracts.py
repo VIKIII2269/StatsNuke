@@ -16,17 +16,19 @@ def load(name: str) -> dict:  # type: ignore[type-arg]
 
 def test_league_contract() -> None:
     data = LeagueData.model_validate(load("league.json"))
-    assert data.teamsData["87"].history[0].ppda.def_ == 25
+    assert data.dates[0].isResult
+    assert all(len(t.history) for t in data.teams.values())
 
 
 def test_match_contract() -> None:
     data = MatchData.model_validate(load("match.json"))
-    assert len(data.shotsData["h"]) == 2
+    assert set(data.shots) == {"h", "a"}
+    assert all(s.h_a == "h" for s in data.shots["h"])
 
 
 def test_renamed_field_fails() -> None:
     bad = copy.deepcopy(load("match.json"))
-    for shot in bad["shotsData"]["h"]:
+    for shot in bad["shots"]["h"]:
         shot["expectedGoals"] = shot.pop("xG")
     with pytest.raises(ValidationError, match="xG"):
         MatchData.model_validate(bad)
