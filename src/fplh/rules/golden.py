@@ -88,6 +88,18 @@ def history_from_fpl(
     return _normalise(season, df)
 
 
+def from_silver(season: str, player_match: pd.DataFrame) -> GoldenFrame:
+    """Golden frame from silver ``fact_player_match`` (every season, any source)."""
+    df = player_match[player_match["season"] == season].rename(
+        columns={"fpl_fixture_id": "fixture"}
+    )
+    if df["defensive_contribution"].isna().all():
+        df = df.drop(columns=["defensive_contribution"])  # not recorded that season
+    for c in DEFENSIVE_COLUMNS:
+        df[c] = df[c].fillna(0).astype("int64")
+    return GoldenFrame(season, df.reset_index(drop=True))
+
+
 def load_known_exceptions(path: Path, season: str) -> set[tuple[int, int]]:
     """``(element, fixture)`` pairs excused from the exact-match gate, with a reason each."""
     if not path.exists():

@@ -46,10 +46,12 @@ golden_app = typer.Typer(no_args_is_help=True, help="Golden tests against offici
 backfill_app = typer.Typer(no_args_is_help=True, help="Download historical files into bronze.")
 report_app = typer.Typer(no_args_is_help=True, help="Data availability reports.")
 silver_app = typer.Typer(no_args_is_help=True, help="Build validated silver tables.")
+evaluate_app = typer.Typer(no_args_is_help=True, help="Walk-forward evaluation and checks.")
 app.add_typer(collect_app, name="collect")
 app.add_typer(backfill_app, name="backfill")
 app.add_typer(report_app, name="report")
 app.add_typer(silver_app, name="silver")
+app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(rules_app, name="rules")
 app.add_typer(golden_app, name="golden")
 
@@ -362,6 +364,69 @@ def golden_check(
     if not report.points_mismatches.empty:
         typer.echo(report.points_mismatches.head(show).to_string())
     if not report.ok:
+        raise typer.Exit(1)
+
+
+@golden_app.command("check-silver")
+def golden_check_silver(
+    season: Annotated[list[str] | None, typer.Option("--season", help="e.g. 2019-20")] = None,
+) -> None:
+    """Reproduce official points for every silver season (built by `fplh silver build`)."""
+    from fplh.features.information_set import SilverStore
+    from fplh.rules.golden import from_silver
+
+    pm = SilverStore(Lake(get_settings().lake_uri)).get("fact_player_match")
+    if pm.empty:
+        typer.echo("no silver fact_player_match; run `fplh silver build`", err=True)
+        raise typer.Exit(2)
+    failed = False
+    for s in season or sorted(pm["season"].unique()):
+        report = check(
+            from_silver(s, pm),
+            load_rules(s),
+            load_known_exceptions(KNOWN_EXCEPTIONS, s),
+            bonus_from_bps=False,  # silver keeps every player, but not always every BPS row
+        )
+        typer.echo(report.summary())
+        failed |= not report.ok
+    if failed:
+        raise typer.Exit(1)
+
+
+@evaluate_app.command("a0")
+def evaluate_a0(
+    season: Annotated[list[str], typer.Option("--season", help="e.g. 2022-23 (repeatable)")],
+) -> None:
+    """A0 baseline walk-forward per season; metrics go to the gold leaderboard."""
+    from fplh.evaluate.a0 import evaluate_season
+
+    lake = Lake(get_settings().lake_uri)
+    for s in season:
+        r = evaluate_season(lake, s)
+        typer.echo(f"== {s}  (runs: {r.run_ids})")
+        for level, metrics in (("player", r.player_metrics), ("match", r.match_metrics)):
+            typer.echo(f"  {level}: " + ", ".join(f"{k}={v:.4f}" for k, v in metrics.items()))
+
+
+@evaluate_app.command("leakage")
+def evaluate_leakage(
+    season: Annotated[str, typer.Option(help="Silver season label, e.g. 2024-25")],
+    every: Annotated[int, typer.Option(help="Check every n-th gameweek deadline.")] = 5,
+) -> None:
+    """Run the leakage checks (max_observed_at ≤ D, future-shuffle) on real silver."""
+    from fplh.features.information_set import SilverStore
+    from fplh.features.leakage import check_leakage
+    from fplh.features.spine import historical_deadlines
+
+    store = SilverStore(Lake(get_settings().lake_uri))
+    tables = ("dim_fixture", "fact_player_match", "snap_fpl_player", "snap_odds")
+    frames = {t: store.get(t) for t in tables}
+    deadlines = list(historical_deadlines(frames["dim_fixture"], season)["deadline_at"])[::every]
+    problems = check_leakage(frames, deadlines)
+    for p in problems:
+        typer.echo(p, err=True)
+    typer.echo(f"{len(deadlines)} deadlines checked, {len(problems)} problems")
+    if problems:
         raise typer.Exit(1)
 
 
