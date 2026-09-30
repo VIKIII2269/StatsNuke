@@ -1,0 +1,16 @@
+{
+  "bytes": 474264,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "event-live",
+  "http_status": 200,
+  "observed_at": "2026-09-30T16:04:01Z",
+  "observed_at_us": "2026-09-30T16:04:01.180565+00:00",
+  "params": {
+    "gw": "5"
+  },
+  "response_headers": {},
+  "sha256": "aeee6dd5b56567b04ef9b4e5b9828ee4d81e094803dc0e6553cd3b394178c6dd",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/event/5/live/"
+}
