@@ -348,8 +348,13 @@ def fit_hyperparameters(
     tune: Iterable[str] = tuple(TUNABLE),
     fixed: Mapping[str, float] | None = None,
     maxiter: int = 300,
+    restarts: int = 0,
 ) -> tuple[TeamStrengthParams, float]:
-    """Maximise the one-step-ahead predictive log-likelihood of goals (per match)."""
+    """Maximise the one-step-ahead predictive log-likelihood of goals (per match).
+
+    Nelder–Mead's simplex collapses in this many dimensions before converging, so it is
+    restarted from its own optimum up to ``restarts`` times while that still improves
+    the objective by more than 1e-5."""
     base = (init or TeamStrengthParams()).with_(**(fixed or {}))
     names = [n for n in tune if n not in (fixed or {})]
     if not championship:  # slopes are unidentified without Championship ratings
@@ -368,13 +373,20 @@ def fit_hyperparameters(
     start = np.array([getattr(base, n) for n in names])
     frac = np.clip((start - lo) / (hi - lo), 1e-3, 1 - 1e-3)
     z0 = np.log(frac / (1 - frac))
-    res = minimize(
-        objective,
-        z0,
-        method="Nelder-Mead",
-        options={"maxiter": maxiter, "xatol": 1e-3, "fatol": 1e-5},
-    )
-    return unpack(res.x), float(res.fun)
+    best_z, best = z0, objective(z0)
+    for _ in range(restarts + 1):
+        res = minimize(
+            objective,
+            best_z,
+            method="Nelder-Mead",
+            options={"maxiter": maxiter, "xatol": 1e-3, "fatol": 1e-5},
+        )
+        improved = best - float(res.fun)
+        if improved > 0:
+            best_z, best = res.x, float(res.fun)
+        if improved <= 1e-5:
+            break
+    return unpack(best_z), best
 
 
 def params_to_dict(p: TeamStrengthParams) -> dict[str, float]:

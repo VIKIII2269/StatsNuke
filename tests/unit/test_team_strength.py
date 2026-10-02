@@ -7,7 +7,12 @@ import pandas as pd
 import pytest
 from scipy.optimize import minimize
 
-from fplh.models.team_strength import TeamStrengthFilter, TeamStrengthParams, run_filter
+from fplh.models.team_strength import (
+    TeamStrengthFilter,
+    TeamStrengthParams,
+    fit_hyperparameters,
+    run_filter,
+)
 
 STATIC = TeamStrengthParams(
     eta=0.25,
@@ -136,3 +141,15 @@ def test_championship_prior_orders_promoted_teams() -> None:
     f.start_season("s1", teams)
     r = f.ratings().set_index("team")
     assert r.loc[strongest, "attack"] > r.loc[weakest, "attack"]
+
+
+def test_restarts_never_worsen_the_fit() -> None:
+    matches, teams, _, _ = simulate(n=6, seasons=2)
+    by_season = {s: teams for s in matches["season"].unique()}
+    tune = ("sigma_a", "omega", "eta")
+    _, obj_once = fit_hyperparameters(matches, by_season, tune=tune, maxiter=8)
+    again, obj_again = fit_hyperparameters(matches, by_season, tune=tune, maxiter=8, restarts=2)
+    default = run_filter(matches, TeamStrengthParams(), by_season)
+    assert obj_again <= obj_once <= -default.log_lik / default.n_scored
+    f = run_filter(matches, again, by_season)
+    assert abs(-f.log_lik / f.n_scored - obj_again) < 1e-12  # reported objective is real

@@ -450,13 +450,23 @@ def models_fit_m1(
     before: Annotated[
         str, typer.Option(help="Train on matches observed before this date.")
     ] = "2022-07-01",
-    maxiter: Annotated[int, typer.Option(help="Nelder-Mead iterations.")] = 400,
+    maxiter: Annotated[int, typer.Option(help="Nelder-Mead iterations per run.")] = 400,
+    restarts: Annotated[
+        int, typer.Option(help="Restart Nelder-Mead from its optimum while it improves.")
+    ] = 2,
+    init: Annotated[
+        Path | None, typer.Option(help="Warm start from this config's parameters.")
+    ] = None,
+    out: Annotated[
+        Path | None, typer.Option(help="Where to write (default configs/models/...).")
+    ] = None,
 ) -> None:
     """Tune M1 hyper-parameters by one-step-ahead predictive likelihood; writes
     configs/models/team_strength.yaml."""
     import pandas as pd
     import yaml
 
+    from fplh.evaluate.phase2 import load_m1_params
     from fplh.evaluate.team_level import championship, observed_matches, season_teams
     from fplh.features.information_set import InformationSet, SilverStore
     from fplh.models.team_strength import (
@@ -470,24 +480,34 @@ def models_fit_m1(
         pd.Timestamp(before, tz="UTC"), SilverStore(Lake(get_settings().lake_uri))
     )
     matches, teams, e1 = observed_matches(info), season_teams(info), championship(info)
-    default = run_filter(matches, TeamStrengthParams(), teams, championship=e1)
-    params, obj = fit_hyperparameters(matches, teams, championship=e1, maxiter=maxiter)
-    typer.echo(f"Championship priors available for {len(e1)} promoted team-seasons")
+    typer.echo(f"Championship priors available for {len(e1)} E1 team-seasons")
+
+    def per_match(p: TeamStrengthParams, with_e1: bool = True) -> float:
+        f = run_filter(matches, p, teams, championship=e1 if with_e1 else None)
+        return f.log_lik / max(f.n_scored, 1)
+
+    start = load_m1_params(init) if init else TeamStrengthParams()
+    params, obj = fit_hyperparameters(
+        matches, teams, championship=e1, init=start, maxiter=maxiter, restarts=restarts
+    )
     seasons = sorted(matches["season"].unique())
+    origin = f" --init {init}" if init else ""
     doc = (
         "# M1 team-strength hyper-parameters (models/team_strength.py).\n"
-        f"# Fitted by `fplh models fit-m1 --before {before}`: one-step-ahead predictive\n"
-        f"# log-likelihood of goals on {seasons[0]}–{seasons[-1]}: {-obj:.4f} per match (defaults "
-        f"{default.log_lik / max(default.n_scored, 1):.4f}).\n"
+        f"# Fitted by `fplh models fit-m1 --before {before} --restarts {restarts}{origin}`:\n"
+        f"# one-step-ahead predictive log-likelihood of goals on {seasons[0]}–{seasons[-1]}:\n"
+        f"# {-obj:.5f} per match (defaults {per_match(TeamStrengthParams()):.5f}; goals only, "
+        f"ω = 0: {per_match(params.with_(omega=0.0)):.5f}; no E1 prior: "
+        f"{per_match(params, with_e1=False):.5f}).\n"
     )
     body = {
         "version": 1,
         "trained_on": [seasons[0], seasons[-1]],
         "params": {k: round(v, 6) for k, v in params_to_dict(params).items()},
     }
-    path = get_settings().configs_dir / "models" / "team_strength.yaml"
+    path = out or get_settings().configs_dir / "models" / "team_strength.yaml"
     path.write_text(doc + yaml.safe_dump(body, sort_keys=False))
-    typer.echo(f"wrote {path}: log-lik/match {-obj:.4f}")
+    typer.echo(f"wrote {path}: log-lik/match {-obj:.5f}")
 
 
 @models_app.command("fit-devig")
