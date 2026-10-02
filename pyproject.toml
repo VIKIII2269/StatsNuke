@@ -25,6 +25,10 @@ s3 = ["s3fs>=2024.6"]
 tracking = [
     "mlflow-skinny>=3.16.1",
 ]
+bayes = [
+    "jax>=0.11.2",
+    "numpyro>=0.22.0",
+]
 
 [project.scripts]
 fplh = "fplh.cli:app"
@@ -56,7 +60,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT"]
-allowed-confusables = ["×", "−", "–", "ı", "’", "ℓ", "ρ", "𝓘"]
+allowed-confusables = ["×", "−", "–", "ı", "’", "ℓ", "ρ", "𝓘", "σ", "ν"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PT018"]
@@ -68,7 +72,7 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*"]
+module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*", "numpyro.*", "jax.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
