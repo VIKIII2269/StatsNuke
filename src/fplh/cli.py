@@ -490,6 +490,42 @@ def models_fit_m1(
     typer.echo(f"wrote {path}: log-lik/match {-obj:.4f}")
 
 
+@models_app.command("fit-devig")
+def models_fit_devig(
+    before: Annotated[
+        str, typer.Option(help="Calibrate on matches observable before this date.")
+    ] = "2022-07-01",
+) -> None:
+    """Pick the default de-vig method by closing-price calibration (Pinnacle, else the
+    market average); writes configs/models/market.yaml."""
+    import pandas as pd
+    import yaml
+
+    from fplh.evaluate.phase2 import CALIBRATION_BOOKS, closing_devig_calibration
+    from fplh.features.information_set import SilverStore
+    from fplh.models.market import DEVIG
+
+    table = closing_devig_calibration(
+        SilverStore(Lake(get_settings().lake_uri)), pd.Timestamp(before, tz="UTC")
+    )
+    if table.empty:
+        typer.echo("no closing 1X2 prices; run `fplh backfill football-data`", err=True)
+        raise typer.Exit(2)
+    typer.echo(table.to_string(index=False))
+    book = next(b for b in CALIBRATION_BOOKS if b in set(table["bookmaker"]))
+    row = table[table["bookmaker"] == book].iloc[0].to_dict()
+    method = min(DEVIG, key=lambda k: float(row[k]))
+    losses = ", ".join(f"{k} {float(row[k]):.5f}" for k in DEVIG)
+    doc = (
+        "# Default de-vig method for pre-match prices (models/market.py, ARCHITECTURE.md §7.3).\n"
+        f"# Chosen by `fplh models fit-devig --before {before}`: mean 1X2 log loss of {book}\n"
+        f"# closing prices over {int(row['n'])} EPL matches: {losses}.\n"
+    )
+    path = get_settings().configs_dir / "models" / "market.yaml"
+    path.write_text(doc + yaml.safe_dump({"version": 1, "devig": method}, sort_keys=False))
+    typer.echo(f"wrote {path}: devig = {method}")
+
+
 @evaluate_app.command("phase2")
 def evaluate_phase2_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],

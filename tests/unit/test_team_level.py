@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
+from fplh.evaluate.phase2 import closing_devig_calibration
 from fplh.evaluate.team_level import (
     GRID_COLS,
     FusedPredictor,
     M1Predictor,
     MarketPredictor,
     fixture_losses,
+    market_rates,
     summarise,
 )
 from fplh.evaluate.walk_forward import run_walk_forward
-from fplh.features.information_set import SilverStore
+from fplh.features.information_set import InformationSet, SilverStore
 from fplh.models.fusion import Fusion
+from fplh.models.goal_benchmarks import GoalModel, benchmarks
+from fplh.models.market import devig
 from fplh.models.team_strength import TeamStrengthParams
 from tests.synthetic_silver import deadlines, make
 from tests.unit.test_walk_forward import _odds
@@ -56,3 +61,46 @@ def test_market_and_fused_predictors() -> None:
     assert (fused["market_weight"] > 0.99).all()
     merged = fused.merge(market, on="fixture_uid", suffixes=("", "_mkt"))
     assert ((merged["lambda_home"] - merged["lambda_home_mkt"]).abs() < 1e-3).all()
+
+
+def test_market_rates_reproduce_the_prices_under_the_grid_model() -> None:
+    frames = make()
+    frames["snap_odds"] = _odds(frames)
+    g1 = benchmarks()["G1"]
+    g1 = GoalModel(g1.name, g1.grid_fn, {"rho": -0.12}, g1.bounds)
+    store = SilverStore.from_frames(frames)
+    ds = deadlines(frames)
+    for method in ("multiplicative", "shin"):
+        pred = run_walk_forward(
+            store, MarketPredictor(g1, devig_method=method), ds, unit="fixture", write=False
+        ).predictions
+        target = devig([2.0, 3.4, 4.0], method)
+        got = pred[["p_home", "p_draw", "p_away"]].to_numpy(float)
+        assert len(pred) and np.abs(got - target).max() < 1e-4
+
+
+def test_market_maximum_is_not_a_book() -> None:
+    frames = make()
+    odds = _odds(frames)
+    odds["bookmaker"] = "market_max"
+    frames["snap_odds"] = odds
+    fx = frames["dim_fixture"].head(3)
+    info = InformationSet.at(max(deadlines(frames)), SilverStore.from_frames(frames))
+    assert market_rates(info, fx, benchmarks()["G0"])["lam_mkt_home"].isna().all()
+
+
+def test_closing_calibration_uses_only_observable_closing_prices() -> None:
+    frames = make()
+    dim = frames["dim_fixture"]
+    odds = _odds(frames).assign(is_closing=True, division="E0")
+    odds["observed_at"] = odds["kickoff_at"]
+    frames["snap_odds"] = odds
+    frames["fd_match"] = dim[["fixture_uid", "home_goals", "away_goals", "kickoff_at"]].assign(
+        division="E0", observed_at=dim["kickoff_at"] + pd.Timedelta(hours=48)
+    )
+    store = SilverStore.from_frames(frames)
+    mid = dim["kickoff_at"].sort_values().iloc[len(dim) // 2]
+    table = closing_devig_calibration(store, mid)
+    assert list(table["bookmaker"]) == ["market_avg"]
+    assert 0 < table["n"].iloc[0] < len(dim)  # later matches are not observable yet
+    assert set(table.columns) >= {"multiplicative", "power", "shin"}

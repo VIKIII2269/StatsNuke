@@ -8,11 +8,15 @@ Inversion under the dependent goal models (G1–G3) lives in ``goal_benchmarks``
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
+import yaml
 from scipy.optimize import brentq, minimize
 from scipy.stats import poisson
+
+from fplh.settings import get_settings
 
 MAX_GOALS = 10
 
@@ -59,6 +63,17 @@ DEVIG = {"multiplicative": devig_multiplicative, "power": devig_power, "shin": d
 def devig(prices: npt.ArrayLike, method: str = "multiplicative") -> npt.NDArray[np.float64]:
     """De-vig one market (1-D prices) with the named method."""
     return DEVIG[method](prices)
+
+
+def load_devig_method(path: Path | None = None) -> str:
+    """The configured default de-vig method (``fplh models fit-devig``), else multiplicative."""
+    path = path or get_settings().configs_dir / "models" / "market.yaml"
+    if not path.exists():
+        return "multiplicative"
+    method = str(yaml.safe_load(path.read_text())["devig"])
+    if method not in DEVIG:
+        raise ValueError(f"{path}: unknown de-vig method {method!r}; expected one of {list(DEVIG)}")
+    return method
 
 
 def shin_z(prices: npt.ArrayLike) -> float:

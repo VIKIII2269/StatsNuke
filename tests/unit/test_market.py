@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from fplh.models.market import devig, devig_multiplicative, devig_power, devig_shin, shin_z
+from fplh.models.market import (
+    devig,
+    devig_multiplicative,
+    devig_power,
+    devig_shin,
+    load_devig_method,
+    shin_z,
+)
 
 BOOKS = [[1.8, 3.8, 4.5], [1.25, 6.5, 13.0], [2.9, 3.3, 2.6], [1.05, 15.0, 41.0]]
 
@@ -52,3 +61,13 @@ def test_devig_calibration_prefers_the_generating_method() -> None:
     loss = devig_calibration(np.array(rows), np.array(ys))
     assert set(loss) == {"multiplicative", "power", "shin"}
     assert loss["power"] <= loss["multiplicative"]
+
+
+def test_devig_method_config(tmp_path: Path) -> None:
+    path = tmp_path / "market.yaml"
+    assert load_devig_method(path) == "multiplicative"  # no config yet
+    path.write_text("version: 1\ndevig: shin\n")
+    assert load_devig_method(path) == "shin"
+    path.write_text("version: 1\ndevig: additive\n")
+    with pytest.raises(ValueError, match="unknown de-vig method"):
+        load_devig_method(path)

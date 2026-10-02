@@ -15,6 +15,7 @@ import pandas as pd
 import yaml
 
 from fplh.evaluate.bootstrap import compare
+from fplh.evaluate.metrics import outcome_index
 from fplh.evaluate.team_level import (
     FusedPredictor,
     M1Predictor,
@@ -34,6 +35,8 @@ from fplh.features.spine import historical_deadlines, target_fixtures
 from fplh.lake.storage import Lake
 from fplh.models.fusion import Fusion
 from fplh.models.goal_benchmarks import GoalModel, benchmarks
+from fplh.models.market import DEVIG as DEVIG_METHODS
+from fplh.models.market import devig_calibration, load_devig_method
 from fplh.models.team_strength import TeamStrengthParams, run_filter
 from fplh.settings import get_settings
 
@@ -42,6 +45,42 @@ def load_m1_params(path: Path | None = None) -> TeamStrengthParams:
     path = path or get_settings().configs_dir / "models" / "team_strength.yaml"
     cfg = yaml.safe_load(path.read_text())
     return TeamStrengthParams(**cfg["params"])
+
+
+CALIBRATION_BOOKS = ("pinnacle", "market_avg")
+
+
+def closing_devig_calibration(
+    store: SilverStore, before: pd.Timestamp, division: str = "E0"
+) -> pd.DataFrame:
+    """Mean 1X2 log loss of each de-vig method on the closing prices of matches observable
+    before ``before`` (ARCHITECTURE.md §7.3), per book: closing prices are the sharpest,
+    so the method that calibrates them best is the default for pre-match prices."""
+    info = InformationSet.at(before, store)
+    odds, res = info.table("snap_odds"), info.table("fd_match")
+    if odds.empty or res.empty:
+        return pd.DataFrame(columns=["bookmaker", "n", *sorted(DEVIG_METHODS)])
+    c = odds[
+        odds["is_closing"]
+        & (odds["market"] == "1x2")
+        & (odds["division"] == division)
+        & odds["bookmaker"].isin(CALIBRATION_BOOKS)
+    ]
+    wide = (
+        c.pivot_table(
+            index=["fixture_uid", "bookmaker"], columns="outcome", values="price", aggfunc="last"
+        )
+        .dropna(subset=["home", "draw", "away"])
+        .reset_index()
+    )
+    res = res[res["division"] == division].dropna(subset=["home_goals"])
+    j = wide.merge(res[["fixture_uid", "home_goals", "away_goals"]], on="fixture_uid")
+    rows = []
+    for book, g in j.groupby("bookmaker"):
+        y = outcome_index(g["home_goals"].astype(int), g["away_goals"].astype(int))
+        losses = devig_calibration(g[["home", "draw", "away"]].to_numpy(float), y)
+        rows.append({"bookmaker": book, "n": len(g), **losses})
+    return pd.DataFrame(rows).sort_values("bookmaker").reset_index(drop=True)
 
 
 def training_predictions(
@@ -80,6 +119,7 @@ class Phase2Result:
 def evaluate_phase2(lake: Lake, seasons: list[str], *, log: bool = True) -> Phase2Result:
     store = SilverStore(lake)
     params = load_m1_params()
+    method = load_devig_method()
     dim = store.get("dim_fixture")
     deadlines = [d for s in seasons for d in historical_deadlines(dim, s)["deadline_at"]]
     start = min(deadlines)
@@ -129,17 +169,26 @@ def evaluate_phase2(lake: Lake, seasons: list[str], *, log: bool = True) -> Phas
 
     # Market-only and fused (need pre-match odds in silver).
     market = run_walk_forward(
-        store, MarketPredictor(goal_models["G1"]), deadlines, unit="fixture", lake=lake
+        store,
+        MarketPredictor(goal_models["G1"], devig_method=method),
+        deadlines,
+        unit="fixture",
+        lake=lake,
     )
     fusion_info: dict[str, object] = {"available": False}
     if not market.predictions.empty:
         runs["market-only"] = market.predictions
         run_ids["market-only"] = market.run_id
-        fusion = _fit_fusion(store, params, goal_models["G1"], start)
-        fusion_info = {"available": True, "alpha": fusion.alpha, "bias": fusion.bias}
+        fusion = _fit_fusion(store, params, goal_models["G1"], start, method)
+        fusion_info = {
+            "available": True,
+            "devig": method,
+            "alpha": fusion.alpha,
+            "bias": fusion.bias,
+        }
         fused = run_walk_forward(
             store,
-            FusedPredictor(M1Predictor(params, goal_models["G1"]), fusion),
+            FusedPredictor(M1Predictor(params, goal_models["G1"]), fusion, devig_method=method),
             deadlines,
             unit="fixture",
             lake=lake,
@@ -200,7 +249,11 @@ def evaluate_phase2(lake: Lake, seasons: list[str], *, log: bool = True) -> Phas
 
 
 def _fit_fusion(
-    store: SilverStore, params: TeamStrengthParams, gm: GoalModel, before: pd.Timestamp
+    store: SilverStore,
+    params: TeamStrengthParams,
+    gm: GoalModel,
+    before: pd.Timestamp,
+    method: str = "multiplicative",
 ) -> Fusion:
     """Fusion weights from training-period fixtures: M1 rates at each training deadline
     plus the market prices observable then."""
@@ -218,7 +271,7 @@ def _fit_fusion(
             if fx.empty:
                 continue
             mod = M1Predictor(params, gm).rates(info, fx)
-            mk = market_features(info, fx)
+            mk = market_features(info, fx, gm, method)
             rows.append(
                 fx[["fixture_uid"]]
                 .merge(mod, on="fixture_uid")
