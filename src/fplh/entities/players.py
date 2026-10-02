@@ -7,8 +7,9 @@ made per team-season (ARCHITECTURE.md §6.4):
 2. name score: max rapidfuzz ``token_set_ratio`` over FPL name variants (full name,
    web name, first + web) against the Understat name, all accent/case-normalised;
 3. appearance overlap: Jaccard index of the fixtures each source says the player
-   played in. This is independent evidence that, unlike summed minutes, doesn't depend on
-   how each source counts substitute minutes (they differ by ~1 min per appearance);
+   played in, over fixtures both sources cover. This is independent evidence that,
+   unlike summed minutes, doesn't depend on how each source counts substitute minutes
+   (they differ by ~1 min per appearance) or on their data windows differing;
 4. one-to-one greedy assignment, strongest evidence first;
 5. decision: score ≥ 92 with overlap ≥ 0.8 → auto; a pair already linked by name in
    another season with overlap ≥ 0.8 → auto; score 80–92 with overlap ≥ 0.95 over at
@@ -82,8 +83,18 @@ def _candidates(
             ["season", "code", "first_name", "second_name", "web_name"]
         ].itertuples(index=False)
     }
-    fpl_sets = _played(fpl_apps, "code")
-    us_sets = _played(us_apps, "understat_player_id")
+    # Only fixtures both sources cover are evidence: during a live season the sources'
+    # windows differ (e.g. FPL history to GW1, Understat to GW5).
+    common: dict[tuple[str, str], set[str]] = {}
+    for (s, t), g in fpl_apps.groupby(["season", "team"]):
+        common[(str(s), str(t))] = set(g["fixture_uid"].astype(str))
+    for (s, t), g in us_apps.groupby(["season", "team"]):
+        key = (str(s), str(t))
+        common[key] = common.get(key, set()) & set(g["fixture_uid"].astype(str))
+    fpl_sets = {k: v & common.get(k[:2], set()) for k, v in _played(fpl_apps, "code").items()}
+    us_sets = {
+        k: v & common.get(k[:2], set()) for k, v in _played(us_apps, "understat_player_id").items()
+    }
     us_names = (
         us_apps.drop_duplicates(["season", "team", "understat_player_id"])
         .set_index(["season", "team", "understat_player_id"])["player_name"]
@@ -101,8 +112,11 @@ def _candidates(
             score = max(token_set_ratio(v, uname) for v in variants)
             if score < REVIEW:
                 continue
+            union = f_fix | u_fix
+            if not union:
+                continue  # no fixture both sources cover: no evidence either way
             shared = len(f_fix & u_fix)
-            rows.append((s, t, code, uid, float(score), shared / len(f_fix | u_fix), shared))
+            rows.append((s, t, code, uid, float(score), shared / len(union), shared))
     cand = pd.DataFrame(rows, columns=CAND_COLUMNS)
     strong = cand[(cand["score"] >= AUTO) & (cand["overlap"] >= OVERLAP)]
     known = set(zip(strong["code"], strong["understat_player_id"], strict=True))

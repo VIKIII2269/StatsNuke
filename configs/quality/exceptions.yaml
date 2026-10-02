@@ -1,0 +1,10 @@
+# Upstream data defects excused from specific quality gates, each verified by hand.
+# Entries are exact keys, never patterns; the gate output reports how many were excused.
+# Never add an entry to make a build pass without checking the raw bronze payload.
+understat_shot_conservation:
+  - match: 14582
+    side: h
+    reason: >-
+      Sheffield United v Everton, 2020-12-26: the roster credits David McGoldrick with
+      1 shot that is absent from the shot list (9 shots listed, roster sums to 10).
+      Verified in the raw getMatchData payload on 2026-10-02.

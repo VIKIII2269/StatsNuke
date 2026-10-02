@@ -11,7 +11,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | Phase | Theme | Status |
 |---|---|---|
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
-| 1 | Lake, entities, walk-forward harness | **Built**; real-data validation of football-data, Understat and odds waits on network access (§2.3) |
+| 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
 | 2 | Team level (M1–M3, G0–G3) | Planned |
 | 3 | Match and player level (G4–G6, M4–M10, simulator) | Planned |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
@@ -112,45 +112,54 @@ Goal: every historical fact in silver with correct `o_f`, one identity per playe
 
 | # | Ticket | Status | Where |
 |---|---|---|---|
-| 1.1 | football-data E0/E1 backfill + odds-column report | Built, mock-tested; **real run pending** | `collectors/football_data.py`, `lake/silver/football_data.py`, `fplh backfill football-data`, `fplh report odds-columns` |
+| 1.1 | football-data E0/E1 backfill + odds-column report | **Built and run** (68 files, 1993/94–2026/27) | `collectors/football_data.py`, `lake/silver/football_data.py`, `fplh backfill football-data`, `fplh report odds-columns` |
 | 1.2 | vaastav backfill | **Built and run** (2016/17–2026/27) | `collectors/vaastav.py`, `lake/silver/vaastav.py`, `fplh backfill vaastav` |
-| 1.3 | Understat league + match backfill | Built, mock-tested; **real run pending** | `collectors/understat.py`, `lake/silver/understat.py`, `fplh backfill understat` |
+| 1.3 | Understat league + match backfill | **Built and run** (13 seasons, 4,610 matches) | `collectors/understat.py`, `lake/silver/understat.py`, `fplh backfill understat` |
 | 1.4 | The Odds API + credit budget planner | Built, mock-tested; live check needs `FPLH_ODDS_API_KEY` | `collectors/odds.py`, `collectors/odds_budget.py`, `fplh collect odds --due` |
 | 1.5 | FBref events | **Deferred to Phase 3** (user decision): lineups and minutes come from FPL, per-player subs and cards from Understat rosters | — |
 | 1.6 | Silver normalisers + pandera contracts | **Built**; rebuilds are byte-identical | `lake/silver/`, `fplh silver build` |
-| 1.7 | Entities (teams, fixtures, players) | **Built**; the player coverage gate needs Understat data | `entities/`, `configs/entities/` |
+| 1.7 | Entities (teams, fixtures, players) | **Built**; player coverage 100 % in every season | `entities/`, `configs/entities/` |
 | 1.8 | Quality gates | **Built**; each gate has a test that corrupts one fixture | `lake/quality.py` |
 | 1.9 | Information set + spine | **Built** | `features/information_set.py`, `features/spine.py`, `features/builders.py` |
 | 1.10 | Leakage tests | **Built**, CI-blocking; clean on real 2024/25 silver | `tests/leakage/`, `fplh evaluate leakage` |
 | 1.11 | Metrics | **Built** | `evaluate/metrics.py` |
 | 1.12 | Block bootstrap + Diebold–Mariano | **Built**; size ≈ 5 % | `evaluate/bootstrap.py` |
 | 1.13 | Walk-forward + manifests + tracking | **Built**; replays give the same run id and identical bytes | `evaluate/walk_forward.py`, `evaluate/manifest.py`, `evaluate/tracking.py` |
-| 1.14 | A0 leaderboard | **Player A0 logged** for 2022/23–2024/25 without market prices; the market-based version and match A0 wait on football-data | `models/baselines.py`, `models/market.py`, `evaluate/a0.py`, `fplh evaluate a0` |
+| 1.14 | A0 leaderboard | **Logged** for 2022/23–2024/25: player and match levels, with market prices | `models/baselines.py`, `models/market.py`, `evaluate/a0.py`, `fplh evaluate a0` |
 
-### 2.2 Results on real data (vaastav history)
+### 2.2 Results on real data
 
-- **Silver build:** 254,119 player-match rows (2016/17–2026/27), 3,810 fixtures, 2,723 players. Goal conservation holds on **all 7,620 team-fixtures**.
-- **Golden gate extended to every season:** 2016/17–2024/25 rules configs added. `fplh golden check-silver` reproduces official `total_points` on **all 254,119 player-fixture rows, 11 seasons, 0 mismatches**.
-- **A0 player baseline** (walk-forward, horizon 1, league-average clean-sheet rates because no market data yet):
+Full backfills: vaastav 2016/17–2026/27, football-data E0 + E1 1993/94–2026/27 (68 files) and Understat 2014/15–2026/27 (4,610 matches). `fplh silver build` passes **every blocking gate**:
 
-| Season | MAE (all) | RMSE (all) | Spearman ρ within position (all) | MAE (played) | ρ (played) | Mean pred / actual |
-|---|---|---|---|---|---|---|
-| 2022/23 | 1.054 | 2.044 | 0.707 | 2.058 | 0.304 | 1.205 / 1.200 |
-| 2023/24 | 0.977 | 2.006 | 0.710 | 2.122 | 0.294 | 1.102 / 1.053 |
-| 2024/25 | 1.021 | 2.003 | 0.713 | 2.023 | 0.298 | 1.176 / 1.148 |
+| Gate | Result |
+|---|---|
+| Goal conservation | 7,620 / 7,620 FPL team-fixtures |
+| Cross-source scores (FPL, football-data, Understat) | 4,610 multi-source fixtures, 0 disagreements |
+| Understat shot conservation | 9,220 match sides; 1 upstream defect excused with its evidence in `configs/quality/exceptions.yaml` |
+| Kickoff agreement | 0 fixtures more than 36 h apart |
+| Player coverage (gate ≥ 99.5 %) | **100 % of FPL minutes in every season 2016/17–2026/27**: 5,764 team-season links (13 from 5 hand-checked overrides) |
+| Pre-match odds coverage (2014/15+) | 2,710 / 2,710 fixtures |
 
-"All" includes unused squad players, who are easy zeros. "Played" is the honest comparison row for later models.
+Also:
+- golden `total_points` reproduced on all 254,119 player-fixtures, 0 mismatches;
+- leakage checks clean on real 2024/25;
+- rebuilds byte-identical across 163 silver parts.
 
-### 2.3 Not yet verified on real data (blocked hosts)
+**Odds availability (spec gap 3), `fplh report odds-columns`:**
+- Pinnacle pre-match and closing 1X2 are complete for 2012/13–2024/25, cover 55 % of 2025/26 and are absent in 2026/27, confirming the July 2025 API closure in the data.
+- Market-average closing (1X2 and O/U 2.5) is complete from 2019/20.
+- **Benchmark decision:** de-vigged Pinnacle closing through 2024/25, market-average closing afterwards. The tuning seasons have both.
 
-The build environment's egress policy returns 403 for `www.football-data.co.uk`, `understat.com` and `api.the-odds-api.com`. Until they are allowed (environment settings → Network access), or the backfills run from GitHub Actions or the VPS, these Phase 1 criteria are verified only with mocks and synthetic data:
+**A0 baseline** (walk-forward, horizon 1, logged to the leaderboard):
 
-1. the odds-column availability report (spec gap 3: are Pinnacle closing columns populated for 2025/26+?);
-2. Understat shot conservation and cross-source score agreement on real matches;
-3. the **≥ 99.5 % player coverage gate** (needs Understat rosters);
-4. the market-based A0 (player clean-sheet terms and the match-level A0 against closing odds).
+| Season | Player MAE (played) | Player ρ within position (played) | Match RPS, A0 pre-match prices | Match RPS, de-vigged closing |
+|---|---|---|---|---|
+| 2022/23 | 2.044 | 0.326 | 0.2043 | 0.2028 |
+| 2023/24 | 2.076 | 0.332 | 0.1790 | 0.1757 |
+| 2024/25 | 1.987 | 0.328 | 0.1983 | 0.1971 |
 
-To finish, run: `fplh backfill football-data && fplh backfill understat && fplh silver build && fplh report odds-columns && fplh evaluate a0 --season 2022-23 --season 2023-24 --season 2024-25`. The Understat backfill takes about 3 h at 0.5 req/s. Any gate failure is investigated, not loosened.
+- Market clean-sheet rates raise player ρ from about 0.30 (league-average rates) to about 0.33.
+- The match rows cover fixtures whose pre-match price was observable by the deadline (342–369 per season); prices collected after a round's deadline are correctly unusable.
 
 ### 2.4 Findings from real data
 
@@ -165,7 +174,17 @@ To finish, run: `fplh backfill football-data && fplh backfill understat && fplh 
 - **Diebold–Mariano at season scale:** the textbook normal DM rejected 8.6 % of A-vs-A comparisons at 38 gameweeks. The implemented version (HLN correction, t critical values, NW truncation at h − 1) rejects ≈ 5 %.
 - **Name matching:** Unicode decomposition leaves `Ø`, `æ`, `ł` and similar letters intact, so they are transliterated explicitly (Ødegaard, Højbjerg, Fabiański).
 
-Exit: coverage gate passes; leakage tests green; A0 logged. **Leakage is green and player A0 is logged; the coverage gate and market A0 wait on §2.3.**
+- **Player linking needed appearance overlap, not minutes:**
+  - FPL and Understat count substitute minutes differently (about 1 min per appearance), and summed-minutes checks vetoed correct links (2016/17 coverage 98.56 %).
+  - Links now require overlap in the fixtures each source says the player played, counted only over fixtures *both* sources cover, because during a live season their windows differ (FPL history to GW1 vs Understat to GW5 in 2026/27).
+  - Understat names are HTML-unescaped (`N&#039;Diaye`).
+  - The 5 remaining spelling and transliteration cases (Hegazi/Hegazy, Zambo Anguissa/Franck Zambo, Yéremy/Yeremi Pino, Fer/Fernando López, Jonathan Castro Otto/Jonny) are overrides with their evidence.
+- **Understat's live JSON keys are `dates`/`teams`/`players` and `rosters`/`shots`**, not the `…Data` names a third-party scraper used. Contract tests now use trimmed real payloads.
+- **Kickoff times:**
+  - Understat timestamps are UTC but differ from FPL's after reschedules (1–4 h in 18 % of 2016/17+ matches), so linked facts take FPL's kickoff.
+  - football-data files before 2019/20 have no kickoff time. The 15:00 imputation made midweek and holiday prices look post-kickoff, so the real kickoff now comes from FPL or Understat, and the pre-match observation rule is capped at kickoff − 1 h, which is always after the round's deadline.
+
+Exit: coverage gate passes; leakage tests green; A0 logged. **Met.**
 
 ## 3. Phase 2: Team level
 

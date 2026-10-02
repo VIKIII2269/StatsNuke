@@ -145,15 +145,17 @@ def _kickoffs(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
 
 def prematch_observed_at(kickoff_utc: pd.Timestamp) -> pd.Timestamp:
     """16:00 UK on the Friday (weekend round: Fri–Mon) or Tuesday (midweek: Tue–Thu)
-    on or before kickoff. If that isn't strictly before kickoff, the price is treated as
-    known only at kickoff (unusable before any deadline)."""
+    on or before kickoff, capped at kickoff − 1 h. The cap covers kickoffs on the
+    collection day itself (e.g. Boxing Day 15:00). A round's deadline is 90 min before
+    its first kickoff, so kickoff − 1 h is always after the deadline of any round the
+    match belongs to: such prices can never inform their own round's forecast."""
     local = kickoff_utc.tz_convert(UK)
     wd = local.weekday()  # Mon=0
     anchor = 4 if wd in (4, 5, 6, 0) else 1  # Friday or Tuesday
     back = (wd - anchor) % 7
     day = (local - timedelta(days=back)).date()
     t = pd.Timestamp(datetime.combine(day, PREMATCH_COLLECTION), tz=UK).tz_convert("UTC")
-    return t if t < kickoff_utc else kickoff_utc
+    return min(t, kickoff_utc - timedelta(hours=1))
 
 
 def _book(prefix: str) -> tuple[str, str, bool]:
@@ -295,6 +297,7 @@ FAMILIES = {
     "bet365_closing_1x2": ("B365CH", "B365CD", "B365CA"),
     "pinnacle_prematch_1x2": ("PSH", "PSD", "PSA"),
     "market_avg_prematch_1x2": ("AvgH", "AvgD", "AvgA"),
+    "betbrain_avg_prematch_1x2": ("BbAvH", "BbAvD", "BbAvA"),
     "pinnacle_closing_ou25": ("PC>2.5", "PC<2.5"),
     "market_avg_closing_ou25": ("AvgC>2.5", "AvgC<2.5"),
     "market_avg_prematch_ou25": ("Avg>2.5", "Avg<2.5"),
@@ -304,7 +307,12 @@ FAMILIES = {
 def odds_column_report(files: dict[str, bytes]) -> pd.DataFrame:
     """Share of matches with a complete price set per odds family, per season code."""
     rows = []
-    for season, payload in sorted(files.items()):
+
+    def start_year(code: str) -> int:
+        yy = int(code[:2])
+        return (2000 if yy < 50 else 1900) + yy
+
+    for season, payload in sorted(files.items(), key=lambda kv: start_year(kv[0])):
         df, _ = read_football_data_csv(payload)
         row: dict[str, object] = {"season": season, "matches": len(df)}
         for family, cols in FAMILIES.items():

@@ -130,11 +130,39 @@ def test_substitute_minute_conventions_do_not_block_links() -> None:
     assert len(link_players(fa, ua, fp).links) == 1
 
 
+def _with_ever_present_teammate(
+    fa: pd.DataFrame, ua: pd.DataFrame, fixtures: list[int]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Both sources then cover the same fixtures (the overlap only counts those)."""
+    keeper_f = _apps("2025-26", "t", "code", [99], [fixtures])
+    keeper_u = _apps("2025-26", "t", "understat_player_id", [999], [fixtures]).assign(
+        player_name="Keeper"
+    )
+    return pd.concat([fa, keeper_f]), pd.concat([ua, keeper_u])
+
+
 def test_disjoint_appearances_block_a_name_match() -> None:
     fa, ua, fp = _frames(["Bernardo Silva"], [list(range(20, 30))], [list(range(0, 10))])
+    fa, ua = _with_ever_present_teammate(fa, ua, list(range(30)))
+    fp = pd.concat(
+        [
+            fp,
+            pd.DataFrame(
+                [
+                    {
+                        "season": "2025-26",
+                        "code": 99,
+                        "first_name": "K",
+                        "second_name": "Keeper",
+                        "web_name": "Keeper",
+                        "position": "GK",
+                    }
+                ]
+            ),
+        ]
+    )
     r = link_players(fa, ua, fp)
-    assert r.links.empty
-    assert r.coverage["share"].iloc[0] == 0.0
+    assert set(r.links["code"]) == {99}  # only the keeper links
     assert len(r.review) == 1
 
 
@@ -143,7 +171,25 @@ def test_weaker_name_needs_near_perfect_overlap() -> None:
     fa, ua, fp = _frames(["Bernardo Sylva Junior"], fx, fx)  # name score in 80–92
     assert set(link_players(fa, ua, fp).links["method"]) <= {"name+appearances", "name"}
     fa2, ua2, fp2 = _frames(["Bernardo Sylva Junior"], [list(range(12))], [list(range(9))])
-    assert link_players(fa2, ua2, fp2).links.empty  # overlap 0.75: not enough
+    fa2, ua2 = _with_ever_present_teammate(fa2, ua2, list(range(12)))
+    fp2 = pd.concat(
+        [
+            fp2,
+            pd.DataFrame(
+                [
+                    {
+                        "season": "2025-26",
+                        "code": 99,
+                        "first_name": "K",
+                        "second_name": "Keeper",
+                        "web_name": "Keeper",
+                        "position": "GK",
+                    }
+                ]
+            ),
+        ]
+    )
+    assert set(link_players(fa2, ua2, fp2).links["code"]) == {99}  # overlap 0.75: not enough
 
 
 def test_one_to_one_assignment() -> None:
@@ -175,3 +221,38 @@ def test_cross_season_evidence_and_overrides() -> None:
 
 def test_name_variants() -> None:
     assert "g jesus" in fpl_name_variants("Gabriel", "Fernando de Jesus", "G.Jesus")
+
+
+def test_imputed_football_data_kickoff_ranks_last() -> None:
+    real = pd.Timestamp("2014-12-02 19:45", tz="UTC")
+    fd = pd.DataFrame(
+        {
+            "season": ["2014-15"],
+            "division": ["E0"],
+            "home_team": ["burnley"],
+            "away_team": ["newcastle"],
+            "kickoff_at": [pd.Timestamp("2014-12-02 15:00", tz="UTC")],
+            "kickoff_time_imputed": [True],
+            "home_goals": [1],
+            "away_goals": [1],
+        }
+    )
+    us = pd.DataFrame(
+        {
+            "season": ["2014-15"],
+            "home_team": ["burnley"],
+            "away_team": ["newcastle"],
+            "kickoff_at": [real],
+            "understat_match_id": [4589],
+            "home_goals": [1],
+            "away_goals": [1],
+        }
+    )
+    dim = build_dim_fixture(pd.DataFrame(), fd, us)
+    assert dim.iloc[0]["kickoff_at"] == real
+
+
+def test_overlap_counts_only_fixtures_both_sources_cover() -> None:
+    """Live-season case: FPL history to GW1, Understat to GW5 (2026/27)."""
+    fa, ua, fp = _frames(["Bernardo Silva"], [list(range(5))], [[0]])
+    assert len(link_players(fa, ua, fp).links) == 1

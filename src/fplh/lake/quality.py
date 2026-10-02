@@ -10,6 +10,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 import pandas as pd
+import yaml
+
+from fplh.settings import get_settings
 
 Tables = Mapping[str, pd.DataFrame]
 COVERAGE_MIN = 0.995
@@ -33,6 +36,18 @@ class QualityGateError(RuntimeError):
         self.results = results
         failed = [r for r in results if r.blocking and not r.passed]
         super().__init__("quality gates failed:\n" + "\n".join(r.line() for r in failed))
+
+
+def load_exceptions(check: str) -> list[dict[str, object]]:
+    """Hand-verified upstream defects excused from ``check`` (configs/quality/exceptions.yaml)."""
+    path = get_settings().configs_dir / "quality" / "exceptions.yaml"
+    if not path.exists():
+        return []
+    entries = (yaml.safe_load(path.read_text()) or {}).get(check) or []
+    for e in entries:
+        if not e.get("reason"):
+            raise ValueError(f"quality exception without a reason: {e}")
+    return list(entries)
 
 
 def _empty(*tables: pd.DataFrame) -> bool:
@@ -129,12 +144,19 @@ def check_understat_shots(t: Tables) -> CheckResult:
     counted = shots[shots["result"] != "OwnGoal"].groupby(["understat_match_id", "side"]).size()
     rostered = roster.groupby(["understat_match_id", "side"])["shots"].sum()
     both = pd.DataFrame({"shots": counted, "roster": rostered}).fillna(0)
-    bad = both[both["shots"] != both["roster"]]
+    excused = {
+        (int(str(e["match"])), str(e["side"]))
+        for e in load_exceptions("understat_shot_conservation")
+    }
+    differs = both[both["shots"] != both["roster"]]
+    is_excused = [(int(m), str(sd)) in excused for m, sd in differs.index]
+    bad = differs[[not x for x in is_excused]]
     return CheckResult(
         "understat_shot_conservation",
         True,
         bad.empty,
-        f"{len(bad)} of {len(both)} match sides differ",
+        f"{len(bad)} of {len(both)} match sides differ "
+        f"({sum(is_excused)} excused upstream defects)",
         bad.reset_index(),
     )
 

@@ -23,6 +23,7 @@ from fplh.lake.silver import fpl_live, odds_api
 from fplh.lake.silver import understat as us
 from fplh.lake.silver import vaastav as va
 from fplh.lake.silver.common import latest_payload, season_label
+from fplh.lake.silver.football_data import prematch_observed_at as fd_prematch
 from fplh.lake.silver.schemas import validate
 from fplh.lake.storage import Lake
 from fplh.sources import load_sources
@@ -200,6 +201,7 @@ def _resolve(
         _align_understat_times(t, notes)
 
     t["dim_fixture"] = build_dim_fixture(t["fpl_fixture"], t["fd_match"], us_match)
+    _align_imputed_kickoffs(t, notes)
     all_teams = set()
     for name in ("fd_match", "fpl_fixture", "us_match"):
         df = t.get(name, pd.DataFrame())
@@ -263,6 +265,40 @@ def _align_understat_times(t: dict[str, pd.DataFrame], notes: dict[str, Any]) ->
         if not df.empty:
             df["event_at"] = df["understat_match_id"].map(by_mid["event_at"])
             df["observed_at"] = df["understat_match_id"].map(by_mid["observed_at"])
+
+
+def _align_imputed_kickoffs(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:
+    """football-data rows before 2019/20 have no kickoff time (15:00 UK is imputed). When
+    FPL or Understat knows the real kickoff, use it for the match and its odds, and
+    recompute observation times (results: + lag; pre-match prices: collection rule;
+    closing prices: kickoff)."""
+    matches, odds, dim = t["fd_match"], t["snap_odds"], t["dim_fixture"]
+    if matches.empty or dim.empty:
+        return
+    true_kickoff = dim.set_index("fixture_uid")["kickoff_at"]
+    fix = matches["kickoff_time_imputed"].astype(bool) & matches["fixture_uid"].isin(
+        true_kickoff.index
+    )
+    known = matches["fixture_uid"].map(true_kickoff)
+    fix &= known.notna() & (known != matches["kickoff_at"])
+    notes["football_data/imputed_kickoffs_aligned"] = int(fix.sum())
+    if not fix.any():
+        return
+    lag = matches.loc[fix, "observed_at"] - matches.loc[fix, "event_at"]
+    matches.loc[fix, "kickoff_at"] = known[fix]
+    matches.loc[fix, "event_at"] = known[fix]
+    matches.loc[fix, "observed_at"] = known[fix] + lag
+    if odds.empty:
+        return
+    moved = odds["fixture_uid"].isin(set(matches.loc[fix, "fixture_uid"])) & (
+        odds["source"] == fd.SOURCE
+    )
+    new_k = odds.loc[moved, "fixture_uid"].map(true_kickoff)
+    odds.loc[moved, "kickoff_at"] = new_k
+    odds.loc[moved, "observed_at"] = [
+        k if closing else fd_prematch(k)
+        for k, closing in zip(new_k, odds.loc[moved, "is_closing"], strict=True)
+    ]
 
 
 REPORT_TABLES = {"entity_review_queue", "entity_coverage"}
