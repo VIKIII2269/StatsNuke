@@ -68,40 +68,51 @@ def test_dim_fixture_prefers_fpl_and_flags_sources() -> None:
     assert not dim.loc["2025-26:arsenal:chelsea", "in_fpl"]
 
 
-def _frames(
-    us_names: list[str], us_minutes: list[int], fpl_minutes: list[int]
-) -> tuple[pd.DataFrame, ...]:
-    n = len(fpl_minutes)
-    fm = pd.DataFrame(
-        {"season": "2025-26", "team": "t", "code": range(1, n + 1), "minutes": fpl_minutes}
+FIRST = ["Bernardo", "Joseph", "Gabriel"]
+SECOND = ["Mota Veiga de Carvalho e Silva", "Gomez", "Fernando de Jesus"]
+WEB = ["Bernardo", "Gomez", "G.Jesus"]
+
+
+def _apps(
+    season: str, team: str, key: str, ids: list[int], fixtures: list[list[int]], minutes: int = 90
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"season": season, "team": team, key: i, "fixture_uid": f"f{f}", "minutes": minutes}
+            for i, fx in zip(ids, fixtures, strict=True)
+            for f in fx
+        ]
     )
-    um = pd.DataFrame(
-        {
-            "season": "2025-26",
-            "team": "t",
-            "understat_player_id": range(100, 100 + len(us_names)),
-            "player_name": us_names,
-            "minutes": us_minutes,
-        }
+
+
+def _frames(
+    us_names: list[str], us_fixtures: list[list[int]], fpl_fixtures: list[list[int]]
+) -> tuple[pd.DataFrame, ...]:
+    n = len(fpl_fixtures)
+    fa = _apps("2025-26", "t", "code", list(range(1, n + 1)), fpl_fixtures)
+    ua = _apps(
+        "2025-26", "t", "understat_player_id", list(range(100, 100 + len(us_names))), us_fixtures
+    )
+    ua["player_name"] = ua["understat_player_id"].map(
+        dict(zip(range(100, 100 + len(us_names)), us_names, strict=True))
     )
     fp = pd.DataFrame(
         {
             "season": "2025-26",
             "code": range(1, n + 1),
-            "first_name": ["Bernardo", "Joseph", "Gabriel"][:n],
-            "second_name": ["Mota Veiga de Carvalho e Silva", "Gomez", "Fernando de Jesus"][:n],
-            "web_name": ["Bernardo", "Gomez", "G.Jesus"][:n],
+            "first_name": FIRST[:n],
+            "second_name": SECOND[:n],
+            "web_name": WEB[:n],
             "position": "MID",
         }
     )
-    return fm, um, fp
+    return fa, ua, fp
 
 
-def test_links_by_name_and_minutes() -> None:
-    fm, um, fp = _frames(
-        ["Bernardo Silva", "Joe Gomez", "Gabriel Jesus"], [2500, 1800, 900], [2500, 1800, 900]
-    )
-    r = link_players(fm, um, fp)
+def test_links_by_name_and_appearances() -> None:
+    fx = [list(range(30)), list(range(20)), list(range(10))]
+    fa, ua, fp = _frames(["Bernardo Silva", "Joe Gomez", "Gabriel Jesus"], fx, fx)
+    r = link_players(fa, ua, fp)
     assert dict(zip(r.links["code"], r.links["understat_player_id"], strict=True)) == {
         1: 100,
         2: 101,
@@ -110,33 +121,98 @@ def test_links_by_name_and_minutes() -> None:
     assert r.coverage["share"].iloc[0] == 1.0
 
 
-def test_minutes_disagreement_blocks_a_name_match() -> None:
-    fm, um, fp = _frames(["Bernardo Silva"], [300], [2500])
-    r = link_players(fm.head(1), um, fp.head(1))
-    assert r.links.empty
-    assert r.coverage["share"].iloc[0] == 0.0
+def test_substitute_minute_conventions_do_not_block_links() -> None:
+    """Real 2016/17 case: sources count sub minutes differently (272 vs 254 over a
+    season); the fixtures played still agree, so the link must hold."""
+    fx = [list(range(15))]
+    fa, ua, fp = _frames(["Bernardo Silva"], fx, fx)
+    fa["minutes"], ua["minutes"] = 18, 17
+    assert len(link_players(fa, ua, fp).links) == 1
+
+
+def _with_ever_present_teammate(
+    fa: pd.DataFrame, ua: pd.DataFrame, fixtures: list[int]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Both sources then cover the same fixtures (the overlap only counts those)."""
+    keeper_f = _apps("2025-26", "t", "code", [99], [fixtures])
+    keeper_u = _apps("2025-26", "t", "understat_player_id", [999], [fixtures]).assign(
+        player_name="Keeper"
+    )
+    return pd.concat([fa, keeper_f]), pd.concat([ua, keeper_u])
+
+
+def test_disjoint_appearances_block_a_name_match() -> None:
+    fa, ua, fp = _frames(["Bernardo Silva"], [list(range(20, 30))], [list(range(0, 10))])
+    fa, ua = _with_ever_present_teammate(fa, ua, list(range(30)))
+    fp = pd.concat(
+        [
+            fp,
+            pd.DataFrame(
+                [
+                    {
+                        "season": "2025-26",
+                        "code": 99,
+                        "first_name": "K",
+                        "second_name": "Keeper",
+                        "web_name": "Keeper",
+                        "position": "GK",
+                    }
+                ]
+            ),
+        ]
+    )
+    r = link_players(fa, ua, fp)
+    assert set(r.links["code"]) == {99}  # only the keeper links
+    assert len(r.review) == 1
+
+
+def test_weaker_name_needs_near_perfect_overlap() -> None:
+    fx = [list(range(12))]
+    fa, ua, fp = _frames(["Bernardo Sylva Junior"], fx, fx)  # name score in 80–92
+    assert set(link_players(fa, ua, fp).links["method"]) <= {"name+appearances", "name"}
+    fa2, ua2, fp2 = _frames(["Bernardo Sylva Junior"], [list(range(12))], [list(range(9))])
+    fa2, ua2 = _with_ever_present_teammate(fa2, ua2, list(range(12)))
+    fp2 = pd.concat(
+        [
+            fp2,
+            pd.DataFrame(
+                [
+                    {
+                        "season": "2025-26",
+                        "code": 99,
+                        "first_name": "K",
+                        "second_name": "Keeper",
+                        "web_name": "Keeper",
+                        "position": "GK",
+                    }
+                ]
+            ),
+        ]
+    )
+    assert set(link_players(fa2, ua2, fp2).links["code"]) == {99}  # overlap 0.75: not enough
 
 
 def test_one_to_one_assignment() -> None:
-    fm, um, fp = _frames(["Bernardo Silva"], [2500], [2500, 2500])
+    fx = [list(range(20)), list(range(20))]
+    fa, ua, fp = _frames(["Bernardo Silva"], fx[:1], fx)
     fp.loc[1, ["first_name", "second_name", "web_name"]] = ["Bernardo", "Silva", "B.Silva"]
-    r = link_players(fm.head(2), um, fp.head(2))
-    assert len(r.links) == 1
+    assert len(link_players(fa, ua, fp).links) == 1
 
 
 def test_cross_season_evidence_and_overrides() -> None:
-    fm, um, fp = _frames(["Bernardo Silva"], [2500], [2500])
-    fm2 = pd.concat([fm.head(1), fm.head(1).assign(season="2026-27")])
-    um2 = pd.concat([um, um.assign(season="2026-27", player_name="B. Silvestre")])  # renamed later
-    fp2 = pd.concat([fp.head(1), fp.head(1).assign(season="2026-27")])
-    r = link_players(fm2, um2, fp2)
+    fx = [list(range(20))]
+    fa, ua, fp = _frames(["Bernardo Silva"], fx, fx)
+    fa2 = pd.concat([fa, fa.assign(season="2026-27")])
+    ua2 = pd.concat([ua, ua.assign(season="2026-27", player_name="B. Silvestre")])  # renamed later
+    fp2 = pd.concat([fp, fp.assign(season="2026-27")])
+    r = link_players(fa2, ua2, fp2)
     assert set(r.links["season"]) == {"2025-26"}  # renamed row is below the review bar
     r2 = link_players(
-        fm2, um2, fp2, overrides=[{"code": 1, "understat_player_id": 100, "reason": "t"}]
+        fa2, ua2, fp2, overrides=[{"code": 1, "understat_player_id": 100, "reason": "t"}]
     )
     assert set(r2.links["method"]) == {"override"} and len(r2.links) == 2
     blocked = link_players(
-        fm2, um2, fp2, overrides=[{"code": 1, "understat_player_id": None, "reason": "t"}]
+        fa2, ua2, fp2, overrides=[{"code": 1, "understat_player_id": None, "reason": "t"}]
     )
     assert blocked.links.empty
     dim = build_dim_player(fp2, r.links)
@@ -145,3 +221,38 @@ def test_cross_season_evidence_and_overrides() -> None:
 
 def test_name_variants() -> None:
     assert "g jesus" in fpl_name_variants("Gabriel", "Fernando de Jesus", "G.Jesus")
+
+
+def test_imputed_football_data_kickoff_ranks_last() -> None:
+    real = pd.Timestamp("2014-12-02 19:45", tz="UTC")
+    fd = pd.DataFrame(
+        {
+            "season": ["2014-15"],
+            "division": ["E0"],
+            "home_team": ["burnley"],
+            "away_team": ["newcastle"],
+            "kickoff_at": [pd.Timestamp("2014-12-02 15:00", tz="UTC")],
+            "kickoff_time_imputed": [True],
+            "home_goals": [1],
+            "away_goals": [1],
+        }
+    )
+    us = pd.DataFrame(
+        {
+            "season": ["2014-15"],
+            "home_team": ["burnley"],
+            "away_team": ["newcastle"],
+            "kickoff_at": [real],
+            "understat_match_id": [4589],
+            "home_goals": [1],
+            "away_goals": [1],
+        }
+    )
+    dim = build_dim_fixture(pd.DataFrame(), fd, us)
+    assert dim.iloc[0]["kickoff_at"] == real
+
+
+def test_overlap_counts_only_fixtures_both_sources_cover() -> None:
+    """Live-season case: FPL history to GW1, Understat to GW5 (2026/27)."""
+    fa, ua, fp = _frames(["Bernardo Silva"], [list(range(5))], [[0]])
+    assert len(link_players(fa, ua, fp).links) == 1

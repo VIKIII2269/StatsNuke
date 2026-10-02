@@ -23,6 +23,7 @@ from fplh.lake.silver import fpl_live, odds_api
 from fplh.lake.silver import understat as us
 from fplh.lake.silver import vaastav as va
 from fplh.lake.silver.common import latest_payload, season_label
+from fplh.lake.silver.football_data import prematch_observed_at as fd_prematch
 from fplh.lake.silver.schemas import validate
 from fplh.lake.storage import Lake
 from fplh.sources import load_sources
@@ -197,8 +198,10 @@ def _resolve(
         for name in ("fact_shot", "fact_player_match_understat"):
             if not t.get(name, pd.DataFrame()).empty:
                 t[name]["fixture_uid"] = t[name]["understat_match_id"].map(uid_by_mid)
+        _align_understat_times(t, notes)
 
     t["dim_fixture"] = build_dim_fixture(t["fpl_fixture"], t["fd_match"], us_match)
+    _align_imputed_kickoffs(t, notes)
     all_teams = set()
     for name in ("fd_match", "fpl_fixture", "us_match"):
         df = t.get(name, pd.DataFrame())
@@ -209,16 +212,23 @@ def _resolve(
     roster = t.get("fact_player_match_understat", pd.DataFrame())
     fpl_players = t["fpl_player_season"]
     if not pm.empty:
-        fpl_minutes = pm.groupby(["season", "team", "code"])["minutes"].sum().reset_index()
+        fpl_apps = pm[["season", "team", "code", "fixture_uid", "minutes"]]
         if not roster.empty:
-            us_minutes = roster.groupby(
-                ["season", "team", "understat_player_id"], as_index=False
-            ).agg(player_name=("player_name", "first"), minutes=("minutes", "sum"))
+            us_apps = roster[
+                ["season", "team", "understat_player_id", "player_name", "fixture_uid", "minutes"]
+            ]
         else:
-            us_minutes = pd.DataFrame(
-                columns=["season", "team", "understat_player_id", "player_name", "minutes"]
+            us_apps = pd.DataFrame(
+                columns=[
+                    "season",
+                    "team",
+                    "understat_player_id",
+                    "player_name",
+                    "fixture_uid",
+                    "minutes",
+                ]
             )
-        result = link_players(fpl_minutes, us_minutes, fpl_players, load_overrides())
+        result = link_players(fpl_apps, us_apps, fpl_players, load_overrides())
         t["player_link"] = result.links
         t["entity_review_queue"] = result.review
         t["entity_coverage"] = result.coverage
@@ -232,6 +242,63 @@ def _resolve(
                 lambda c: f"fpl:{int(c)}" if pd.notna(c) else pd.NA
             )
     return t
+
+
+def _align_understat_times(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:
+    """Understat timestamps are UTC but can lag FPL's after a reschedule (±1–4 h in 18 %
+    of 2016/17+ matches). For fixtures FPL knows, take event time from FPL's kickoff and
+    keep Understat's publication lag, so every source agrees on when a match happened."""
+    fpl = t.get("fpl_fixture", pd.DataFrame())
+    us = t["us_match"]
+    if fpl.empty:
+        return
+    kickoff = fpl.set_index("fixture_uid")["kickoff_at"]
+    lag = us["observed_at"] - us["event_at"]
+    fpl_time = us["fixture_uid"].map(kickoff)
+    moved = fpl_time.notna() & (fpl_time != us["event_at"])
+    notes["understat/event_time_aligned_to_fpl"] = int(moved.sum())
+    us["event_at"] = fpl_time.fillna(us["event_at"])
+    us["observed_at"] = us["event_at"] + lag
+    by_mid = us.set_index("understat_match_id")[["event_at", "observed_at"]]
+    for name in ("fact_shot", "fact_player_match_understat"):
+        df = t.get(name, pd.DataFrame())
+        if not df.empty:
+            df["event_at"] = df["understat_match_id"].map(by_mid["event_at"])
+            df["observed_at"] = df["understat_match_id"].map(by_mid["observed_at"])
+
+
+def _align_imputed_kickoffs(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:
+    """football-data rows before 2019/20 have no kickoff time (15:00 UK is imputed). When
+    FPL or Understat knows the real kickoff, use it for the match and its odds, and
+    recompute observation times (results: + lag; pre-match prices: collection rule;
+    closing prices: kickoff)."""
+    matches, odds, dim = t["fd_match"], t["snap_odds"], t["dim_fixture"]
+    if matches.empty or dim.empty:
+        return
+    true_kickoff = dim.set_index("fixture_uid")["kickoff_at"]
+    fix = matches["kickoff_time_imputed"].astype(bool) & matches["fixture_uid"].isin(
+        true_kickoff.index
+    )
+    known = matches["fixture_uid"].map(true_kickoff)
+    fix &= known.notna() & (known != matches["kickoff_at"])
+    notes["football_data/imputed_kickoffs_aligned"] = int(fix.sum())
+    if not fix.any():
+        return
+    lag = matches.loc[fix, "observed_at"] - matches.loc[fix, "event_at"]
+    matches.loc[fix, "kickoff_at"] = known[fix]
+    matches.loc[fix, "event_at"] = known[fix]
+    matches.loc[fix, "observed_at"] = known[fix] + lag
+    if odds.empty:
+        return
+    moved = odds["fixture_uid"].isin(set(matches.loc[fix, "fixture_uid"])) & (
+        odds["source"] == fd.SOURCE
+    )
+    new_k = odds.loc[moved, "fixture_uid"].map(true_kickoff)
+    odds.loc[moved, "kickoff_at"] = new_k
+    odds.loc[moved, "observed_at"] = [
+        k if closing else fd_prematch(k)
+        for k, closing in zip(new_k, odds.loc[moved, "is_closing"], strict=True)
+    ]
 
 
 REPORT_TABLES = {"entity_review_queue", "entity_coverage"}

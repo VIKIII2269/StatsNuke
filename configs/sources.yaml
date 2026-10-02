@@ -18,7 +18,7 @@ sources:
   understat:
     base_url: "https://understat.com"
     requests_per_second: 0.5
-    max_concurrency: 1
+    max_concurrency: 4  # responses take ~8 s; four in flight keep the 0.5 req/s limit busy
     publication_lag_hours: 24
     cadence: "daily, morning after matches (Phase 1)"
   football_data:

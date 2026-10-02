@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
+import pytest
 
 from fplh.lake.quality import (
     check_entity_coverage,
@@ -62,3 +65,23 @@ def test_odds_coverage_gate(lake: Lake) -> None:
     t["snap_odds"] = t["snap_odds"][t["snap_odds"]["home_team"] != "liverpool"]
     r = check_odds_coverage(t)
     assert not r.passed and "1 of 2" in r.details
+
+
+def test_shot_exceptions_excuse_only_listed_sides(
+    lake: Lake, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    from fplh.settings import get_settings
+
+    t = tables(lake)
+    t["fact_shot"] = t["fact_shot"].iloc[1:]
+    mid, side = t["fact_shot"].iloc[0][["understat_match_id", "side"]]
+    configs = tmp_path / "configs"
+    shutil.copytree(get_settings().configs_dir, configs)
+    (configs / "quality" / "exceptions.yaml").write_text(
+        f"understat_shot_conservation:\n  - {{match: {int(mid)}, side: {side}, reason: test}}\n"
+    )
+    monkeypatch.setenv("FPLH_CONFIGS_DIR", str(configs))
+    r = check_understat_shots(t)
+    assert r.passed and "1 excused" in r.details

@@ -29,8 +29,9 @@ def ts(s: str) -> pd.Timestamp:
         ("2025-08-15 19:00", "2025-08-15 15:00"),  # Friday evening → same Friday
         (
             "2025-12-02 15:00",
-            "2025-12-02 15:00",
-        ),  # Tuesday 15:00 kickoff: collection not before → kickoff
+            "2025-12-02 14:00",
+        ),  # kickoff on the collection day: capped at kickoff − 1 h
+        ("2014-12-26 15:00", "2014-12-26 14:00"),  # Boxing Day (Friday) 15:00
     ],
 )
 def test_prematch_observation_rule(kickoff: str, observed: str) -> None:
@@ -90,3 +91,18 @@ def test_odds_column_report() -> None:
     assert report.loc["2526", "pinnacle_closing_1x2"] == 1.0
     assert report.loc["0506", "pinnacle_closing_1x2"] == 0.0
     assert report.loc["2526", "matches"] == 2
+
+
+def test_report_sorts_by_season_start() -> None:
+    old = b"Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\nE0,13/08/94,A,B,1,0\n"
+    report = odds_column_report({"2526": SAMPLE, "9495": old})
+    assert report["season"].tolist() == ["9495", "2526"]
+
+
+def test_cap_is_always_after_the_rounds_deadline() -> None:
+    """Deadline = first kickoff − 90 min ≤ this kickoff − 90 min < kickoff − 1 h."""
+    for kickoff in ("2025-12-02 15:00", "2014-12-26 12:45", "2025-08-16 11:30"):
+        k = ts(kickoff)
+        observed = prematch_observed_at(k)
+        if observed.date() == k.date() and observed > k - pd.Timedelta(hours=4):
+            assert observed > k - pd.Timedelta(minutes=90)

@@ -2,5 +2,20 @@
 #   - {code: <FPL code>, understat_player_id: <id>, reason: "..."}          # link all seasons
 #   - {code: <FPL code>, season: "2021-22", understat_player_id: <id>, reason: "..."}
 #   - {code: <FPL code>, understat_player_id: null, reason: "..."}            # block a bad auto-link
-# Candidates needing a decision are written to gold/reports/entity_review_queue.csv.
-[]
+# Candidates needing a decision are written to gold/reports/entity_review_queue.parquet.
+# Every entry below was checked by hand: same club, same seasons, minutes agree.
+- code: 77777
+  understat_player_id: 3979
+  reason: "Ahmed Hegazi (FPL) = Ahmed Hegazy (Understat), West Brom; 2017-18 minutes 3386 vs 3389"
+- code: 203325
+  understat_player_id: 6434
+  reason: "André-Frank Zambo Anguissa (FPL) = Franck Zambo (Understat), Fulham 2018-19 and 2020-21; minutes 1512/2581 vs 1515/2582"
+- code: 488024
+  understat_player_id: 9024
+  reason: "Yéremy Pino (FPL) = Yeremi Pino (Understat), Crystal Palace 2025-26+; 2025-26 minutes 2074 vs 2134 (sub-minute conventions)"
+- code: 643135
+  understat_player_id: 13200
+  reason: "Fer López (FPL) = Fernando López (Understat), Wolves 2025-26; minutes 228 vs 211"
+- code: 114128
+  understat_player_id: 2280
+  reason: "Jonathan Castro Otto / J.Otto (FPL) = Jonny (Understat), Wolves 2018-19 to 2023-24; auto-linked in other seasons, 2023-24 (4 min) needs the override"

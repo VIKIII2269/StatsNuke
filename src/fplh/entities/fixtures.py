@@ -24,7 +24,8 @@ def build_dim_fixture(
     fpl_fixture: pd.DataFrame, fd_match: pd.DataFrame, us_match: pd.DataFrame
 ) -> pd.DataFrame:
     """One row per EPL fixture seen in any source. Kickoff and score prefer FPL, then
-    football-data, then Understat."""
+    football-data, then Understat; a football-data row whose kickoff time was imputed
+    (no ``Time`` column before 2019/20) ranks last."""
     frames = []
     if not fpl_fixture.empty:
         f = with_fixture_uid(fpl_fixture)
@@ -56,7 +57,11 @@ def build_dim_fixture(
                     "home_goals",
                     "away_goals",
                 ]
-            ].assign(src_rank=1)
+            ].assign(
+                src_rank=d.get("kickoff_time_imputed", pd.Series(False, index=d.index))
+                .astype(bool)
+                .map({True: 3, False: 1})
+            )
         )
     if not us_match.empty:
         u = with_fixture_uid(us_match)

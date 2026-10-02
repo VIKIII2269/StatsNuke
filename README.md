@@ -27,8 +27,8 @@ Calibrated probabilistic forecasts for English Premier League matches and player
 
 Official FPL points are reproduced exactly for all 254,119 player-fixtures from 2016/17 to 2026/27.
 
-Real-data validation of football-data, Understat and odds is pending; see
-[the plan, §2.3](docs/IMPLEMENTATION_PLAN.md#23-not-yet-verified-on-real-data-blocked-hosts).
+Every Phase 1 gate passes on the full real data: 100 % player coverage across sources and exact
+official points; see [the plan, §2.2](docs/IMPLEMENTATION_PLAN.md#22-results-on-real-data).
 
 ## Quickstart
 

@@ -112,7 +112,11 @@ def read_bronze(lake: Lake, payload_key: str) -> tuple[dict[str, Any], bytes]:
 def list_bronze(lake: Lake, source: str, endpoint: str) -> list[str]:
     """Payload keys for one source/endpoint, oldest observation first."""
     prefix = f"bronze/source={source}/endpoint={endpoint}"
-    return [k for k in lake.list(prefix) if k.endswith(PAYLOAD_SUFFIX)]
+    keys = lake.list(prefix)
+    metas = {k for k in keys if k.endswith(META_SUFFIX)}
+    # The sidecar is written last, so a payload without one is an interrupted write:
+    # it is ignored (and re-fetched by backfills) rather than read half-complete.
+    return [k for k in keys if k.endswith(PAYLOAD_SUFFIX) and meta_key(k) in metas]
 
 
 @dataclass(frozen=True)
