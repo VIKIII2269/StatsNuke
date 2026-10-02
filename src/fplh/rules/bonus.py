@@ -32,12 +32,20 @@ def assign_bonus(
     return pd.Series(award, index=bps.index, name="bonus")
 
 
-def assign_bonus_array(bps: np.ndarray, ranks: Sequence[int] = (3, 2, 1)) -> np.ndarray:
-    """Vectorised over leading axes: ``bps`` is (..., players in one fixture)."""
-    b = np.asarray(bps)
+def assign_bonus_array(
+    bps: np.ndarray, ranks: Sequence[int] = (3, 2, 1), eligible: np.ndarray | None = None
+) -> np.ndarray:
+    """Vectorised over leading axes: ``bps`` is (..., players in one fixture).
+    ``eligible`` (broadcastable, e.g. ``minutes > 0``) excludes players from ranking:
+    they get no bonus and do not push anyone down."""
+    b = np.asarray(bps, dtype=float)
+    if eligible is not None:
+        b = np.where(eligible, b, -np.inf)
     # rank = 1 + number of players with strictly greater BPS
     rank = 1 + (b[..., None, :] > b[..., :, None]).sum(axis=-1)
     award = np.zeros(b.shape, dtype=np.int64)
     for i, pts in enumerate(ranks, start=1):
         award[rank == i] = pts
+    if eligible is not None:
+        award = np.where(eligible, award, 0)
     return award

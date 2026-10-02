@@ -22,7 +22,21 @@ defensive_contribution:  # not scored before 2025/26
   MID_FWD: {actions: [clearance, block, interception, tackle, recovery], threshold: 12, points: 0}
   cap_per_match: 0
 bonus:             {ranks: [3, 2, 1], tie_rule: official}
-bps: {}
+# Bonus Points System weights for the events the simulator generates (M10). Official
+# base table; `fplh rules check-bps` compares it with weights estimated from the data.
+bps:
+  minutes_lt_60: 3               # 1-59 minutes; the 6 applies from exactly 60 (data)
+  minutes_gte_60: 6
+  goal: {GK: 12, DEF: 12, MID: 18, FWD: 24}
+  assist: 9
+  clean_sheet: {GK: 12, DEF: 12}
+  goal_conceded: {GK: -4, DEF: -4}
+  save: 2
+  penalty_save: 15
+  penalty_miss: -6
+  yellow_card: -3
+  red_card: -9
+  own_goal: -6
 game:
   squad: {GK: 2, DEF: 5, MID: 5, FWD: 3}
   xi_min: {GK: 1, DEF: 3, MID: 2, FWD: 1}

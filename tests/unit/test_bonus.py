@@ -41,3 +41,11 @@ def test_ineligible_rows_excluded() -> None:
 def test_array_version_batches_simulations() -> None:
     bps = np.array([[40, 30, 20], [10, 10, 30]])
     np.testing.assert_array_equal(assign_bonus_array(bps), [[3, 2, 1], [2, 2, 3]])
+
+
+def test_array_mask_excludes_players_who_did_not_play() -> None:
+    bps = np.array([[30, 25, 40, 20], [10, 10, 5, 50]])
+    played = np.array([[True, True, False, True], [True, True, True, False]])
+    award = assign_bonus_array(bps, eligible=played)
+    # the benched 40 and 50 neither score nor push anyone down
+    np.testing.assert_array_equal(award, [[3, 2, 0, 1], [3, 3, 1, 0]])

@@ -339,6 +339,30 @@ def rules_score(
         result.to_csv(sys.stdout, index=False)
 
 
+@rules_app.command("check-bps")
+def rules_check_bps(
+    season: Annotated[list[str], typer.Option(help="Silver season label(s), e.g. 2024-25.")],
+) -> None:
+    """Official BPS weights against effective weights estimated from silver data."""
+    from fplh.evaluate.bps import estimate_bps_weights
+    from fplh.lake.parquet import read_table, write_parquet
+
+    lake = Lake(get_settings().lake_uri)
+    for s in season:
+        pm = read_table(lake, f"silver/fact_player_match/season={s}")
+        us = read_table(lake, f"silver/fact_player_match_understat/season={s}")
+        if pm.empty:
+            typer.echo(f"{s}: no fact_player_match in silver", err=True)
+            raise typer.Exit(2)
+        if not us.empty:
+            us = us[us["player_uid"].notna()][["player_uid", "fixture_uid", "key_passes", "shots"]]
+            pm = pm.merge(us, on=["player_uid", "fixture_uid"], how="left")
+        table = estimate_bps_weights(pm, load_rules(s.replace("-", "/")))
+        write_parquet(lake, f"gold/reports/bps_weights_{s}.parquet", table, ["component"])
+        typer.echo(f"== {s}: n={table.attrs['n']}, R²={table.attrs['r2']:.3f}")
+        typer.echo(table.to_string(index=False))
+
+
 @golden_app.command("fetch")
 def golden_fetch(
     season: Annotated[list[str], typer.Option(help="Season(s), e.g. 2025/26.")],
