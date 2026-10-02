@@ -118,6 +118,9 @@ class RosterEntry(_Open):
     key_passes: str
     assists: str
     xA: str
+    positionOrder: str | None = None
+    xGChain: str | None = None
+    xGBuildup: str | None = None
 
 
 class MatchData(_Open):

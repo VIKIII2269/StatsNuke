@@ -1,0 +1,13 @@
+# Laws of the game the match simulator needs (not FPL scoring rules).
+# Permanent substitutions per team in the Premier League, by kickoff date. Verified on
+# Understat rosters by the silver `substitution_limit` gate (2014/15-2026/27).
+version: 1
+substitutions:
+  - {from: "1990-01-01", max: 3}
+  - {from: "2020-06-01", max: 5}  # Project Restart, rest of 2019/20
+  - {from: "2020-08-01", max: 3}
+  - {from: "2022-08-01", max: 5}
+# Additional permanent concussion substitutes (trial from February 2021, then adopted).
+concussion_substitutes:
+  from: "2021-02-01"
+  max: 2

@@ -125,3 +125,91 @@ def make(seed: int = 0) -> dict[str, pd.DataFrame]:
 def deadlines(frames: dict[str, pd.DataFrame]) -> list[pd.Timestamp]:
     fx = frames["dim_fixture"]
     return list(fx.groupby("round")["kickoff_at"].min() - pd.Timedelta(minutes=90))
+
+
+def with_understat(frames: dict[str, pd.DataFrame], seed: int = 0) -> dict[str, pd.DataFrame]:
+    """Add Understat rosters (11 starters + up to 3 subs per side, an occasional red),
+    shots whose goals reproduce the scores, and the derived ``fact_match_event``."""
+    from fplh.lake.silver.timeline import derive_lineups, match_events
+
+    rng = np.random.default_rng(seed)
+    us = frames["us_match"]
+    rosters, shots = [], []
+    rid, sid = 1, 1
+    for m in us.itertuples():
+        stamp = {
+            "season": m.season,
+            "understat_match_id": m.understat_match_id,
+            "fixture_uid": m.fixture_uid,
+            "event_at": m.event_at,
+            "observed_at": m.observed_at,
+        }
+        for side, team, goals in (
+            ("h", m.home_team, m.home_goals),
+            ("a", m.away_team, m.away_goals),
+        ):
+            ids = list(range(rid, rid + 11))
+            side_rows = {
+                r: {
+                    **stamp,
+                    "roster_id": r,
+                    "understat_player_id": 5000 + (r % 40),
+                    "player_uid": f"us:{team}:{r - ids[0]}",
+                    "player_name": f"{team}-{r - ids[0]}",
+                    "side": side,
+                    "team": team,
+                    "position": "GK" if r == ids[0] else "MC",
+                    "minutes": 90,
+                    "red_cards": 0,
+                    "roster_in": 0,
+                    "roster_out": 0,
+                }
+                for r in ids
+            }
+            rid += 11
+            for k in range(int(rng.integers(0, 4))):
+                minute = int(rng.integers(46, 89))
+                off = side_rows[ids[10 - k]]
+                off.update(minutes=minute, roster_in=rid)
+                side_rows[rid] = {
+                    **off,
+                    "roster_id": rid,
+                    "position": "Sub",
+                    "player_uid": f"us:{team}:{11 + k}",
+                    "player_name": f"{team}-{11 + k}",
+                    "minutes": 90 - minute,
+                    "roster_in": 0,
+                    "roster_out": off["roster_id"],
+                }
+                rid += 1
+            if rng.random() < 0.1:
+                side_rows[ids[1]].update(minutes=int(rng.integers(20, 80)), red_cards=1)
+            rosters.extend(side_rows.values())
+            for g in range(int(goals)):
+                shooter = side_rows[ids[1 + (g % 9)]]
+                shots.append(
+                    {
+                        **stamp,
+                        "shot_id": sid,
+                        "minute": int(rng.integers(1, 90)),
+                        "side": side,
+                        "team": team,
+                        "result": "Goal",
+                        "situation": "OpenPlay",
+                        "xg": 0.3,
+                        "understat_player_id": shooter["understat_player_id"],
+                        "player_uid": shooter["player_uid"],
+                        "assister_uid": pd.NA,
+                    }
+                )
+                sid += 1
+    roster = pd.DataFrame(rosters)
+    lineups, _ = derive_lineups(roster)
+    shot_df = pd.DataFrame(shots)
+    events = match_events(lineups, shot_df, us)
+    return {
+        **frames,
+        "fact_player_match_understat": lineups,
+        "fact_shot": shot_df,
+        "fact_match_event": events,
+    }

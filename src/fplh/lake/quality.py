@@ -9,9 +9,11 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 import yaml
 
+from fplh.rules.football import load_substitution_rules
 from fplh.settings import get_settings
 
 Tables = Mapping[str, pd.DataFrame]
@@ -220,6 +222,82 @@ def check_odds_coverage(t: Tables, from_season: str = "2014-15") -> CheckResult:
     )
 
 
+def check_lineups(t: Tables) -> CheckResult:
+    """No Understat match side starts more than 11 or ever has more than 11 on the pitch
+    (sides with fewer than 11 starters, e.g. truncated payloads, are reported)."""
+    roster = t.get("fact_player_match_understat")
+    if roster is None or roster.empty or "on_minute" not in roster:
+        return CheckResult("lineups", True, True, "no lineups")
+    bad, short = [], 0
+    for (mid, side), g in roster.groupby(["understat_match_id", "side"], sort=False):
+        on_pitch = np.zeros(131, dtype=int)
+        for on, off in zip(g["on_minute"], g["off_minute"], strict=True):
+            on_pitch[int(on) : int(off)] += 1
+        starters = int(g["started"].sum())
+        short += starters < 11
+        if starters > 11 or on_pitch.max() > 11:
+            bad.append(
+                {
+                    "understat_match_id": mid,
+                    "side": side,
+                    "starters": starters,
+                    "max_on_pitch": int(on_pitch.max()),
+                }
+            )
+    n = roster.groupby(["understat_match_id", "side"]).ngroups
+    return CheckResult(
+        "lineups",
+        True,
+        not bad,
+        f"{len(bad)} of {n} match sides with more than 11 on the pitch; "
+        f"{short} with fewer than 11 starters",
+        pd.DataFrame(bad),
+    )
+
+
+def check_goal_timeline(t: Tables) -> CheckResult:
+    """Goal and own-goal events per side reproduce the Understat final score."""
+    ev, us = t.get("fact_match_event"), t.get("us_match")
+    if ev is None or us is None or _empty(ev, us):
+        return CheckResult("goal_timeline", True, True, "no events")
+    goals = ev[ev["kind"].isin(["goal", "own_goal"])]
+    counted = goals.groupby(["understat_match_id", "side"]).size().unstack(fill_value=0)
+    played = us[us["is_result"].astype(bool)].set_index("understat_match_id")
+    both = played[["home_goals", "away_goals"]].join(counted, how="left").fillna(0)
+    for c in ("h", "a"):
+        if c not in both:
+            both[c] = 0
+    bad = both[(both["h"] != both["home_goals"]) | (both["a"] != both["away_goals"])]
+    return CheckResult(
+        "goal_timeline",
+        True,
+        bad.empty,
+        f"{len(bad)} of {len(both)} matches whose goal events miss the score",
+        bad.reset_index(),
+    )
+
+
+def check_substitution_limit(t: Tables) -> CheckResult:
+    """Substitutions per side within the era's limit plus concussion substitutes (warning:
+    verifies configs/rules/football.yaml, which the simulator uses)."""
+    roster, us = t.get("fact_player_match_understat"), t.get("us_match")
+    if roster is None or us is None or _empty(roster, us) or "started" not in roster:
+        return CheckResult("substitution_limit", False, True, "no lineups")
+    rules = load_substitution_rules()
+    subs = roster[~roster["started"].astype(bool)].groupby(["understat_match_id", "side"]).size()
+    kickoff = us.set_index("understat_match_id")["kickoff_at"].to_dict()
+    k = [pd.Timestamp(kickoff[m]) for m in subs.index.get_level_values(0)]
+    allowed = [rules.limit(x) + rules.concussion_allowance(x) for x in k]
+    over = subs[subs.to_numpy() > np.asarray(allowed)]
+    return CheckResult(
+        "substitution_limit",
+        False,
+        over.empty,
+        f"{len(over)} of {len(subs)} match sides above the limit",
+        over.rename("subs").reset_index(),
+    )
+
+
 CHECKS: list[Callable[[Tables], CheckResult]] = [
     check_goal_conservation,
     check_player_plausibility,
@@ -228,6 +306,9 @@ CHECKS: list[Callable[[Tables], CheckResult]] = [
     check_kickoff_agreement,
     check_entity_coverage,
     check_odds_coverage,
+    check_lineups,
+    check_goal_timeline,
+    check_substitution_limit,
 ]
 
 
