@@ -12,7 +12,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 |---|---|---|
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
 | 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
-| 2 | Team level (M1–M3, G0–G3) | Planned |
+| 2 | Team level (M1–M3, G0–G3) | **Done**: exit gate met as non-inferiority, fused ties the market (§3.2) |
 | 3 | Match and player level (G4–G6, M4–M10, simulator) | Planned |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
 | 5 | Extensions, each gated by an ablation | Planned |
@@ -188,16 +188,86 @@ Exit: coverage gate passes; leakage tests green; A0 logged. **Met.**
 
 ## 3. Phase 2: Team level
 
-| # | Ticket | Acceptance criteria |
-|---|---|---|
-| 2.1 | `models/market.py`: multiplicative, power and Shin de-vig | Probabilities sum to 1; Shin z ∈ [0, 1); default chosen by calibration on closing prices |
-| 2.2 | `models/goal_benchmarks.py`: G0 Poisson, G1 Dixon-Coles, G2 diagonal-inflated bivariate Poisson, G3 COM-Poisson + closed-form market inversion | Grids sum to 1 (truncation mass pooled); inversion reproduces synthetic prices to 1e-6 |
-| 2.3 | `models/team_strength.py` (M1, NumPyro): mean-reverting ratings, Poisson goals + Gamma xG (ω), summer regression + market-value shift, promoted-team prior from E1, horizon variance | Simulated-data recovery test; posterior predictive checks |
-| 2.4 | M1 filter (Laplace/EKF) between 4-GW refits | Filtered ratings within tolerance of a full refit on the same data |
-| 2.5 | `models/fusion.py` (M3): logistic time-to-kickoff weight, ridge, scoreline-grid NLL | w → 0 when no price; fitted on deadline-time snapshots only |
-| 2.6 | Ablations A1–A3 and the G0–G3 ladder | Logged with bootstrap CIs |
+Goal: team scoring rates from a dynamic model (M1), the market (M2) and their fusion (M3), with the scoreline-model ladder G0–G3, evaluated walk-forward on the tuning seasons 2022/23–2024/25.
 
-Exit: fused ≥ market-only on RPS (paired bootstrap), and G0–G3 results logged.
+### 3.1 Tickets
+
+| # | Ticket | Status | Where |
+|---|---|---|---|
+| 2.1 | De-vig: multiplicative, power, Shin; default by closing-price calibration | **Built and fitted**: power (see §3.2) | `models/market.py`, `fplh models fit-devig`, `configs/models/market.yaml` |
+| 2.2 | G0 Poisson, G1 Dixon–Coles, G2 diagonal-inflated bivariate Poisson, G3 COM-Poisson + market inversion | **Built**; grids sum to 1, inversion reproduces synthetic prices to 1e-6 | `models/goal_benchmarks.py` |
+| 2.3 | M1: mean-reverting attack/defence ratings, Poisson goals + ω-weighted Gamma xG, summer regression, E1 promoted-team prior, horizon variance | **Built and fitted** on 2014/15–2021/22. The squad market-value shift is **deferred**: no squad-value source yet | `models/team_strength.py`, `fplh models fit-m1`, `configs/models/team_strength.yaml` |
+| 2.3 | NumPyro NUTS reference model | **Built** (optional `[bayes]` extra); recovers simulated ratings | `models/team_strength_nuts.py` |
+| 2.4 | Laplace/EKF filter for every deadline | **Built**; filtered ratings agree with the NUTS refit on the same data (test) | `models/team_strength.py` |
+| 2.5 | M3 fusion: logistic time-to-kickoff and liquidity weight, ridge, scoreline NLL | **Built**; trained on deadline-time snapshots of the 5 seasons before evaluation, ridge by leave-one-season-out CV | `models/fusion.py` |
+| 2.6 | Ablations A1–A3 and the G0–G3 ladder | **Logged** with gameweek-block bootstrap CIs and DM tests | `evaluate/team_level.py`, `evaluate/phase2.py`, `fplh evaluate phase2` |
+
+### 3.2 Results on real data
+
+**De-vig (`fplh models fit-devig --before 2022-07-01`).** Mean 1X2 log loss of closing prices, EPL matches before the tuning seasons:
+
+| Book | Matches | Multiplicative | Power | Shin |
+|---|---|---|---|---|
+| Pinnacle | 3,800 | 0.953245 | **0.953187** | 0.953239 |
+| Market average | 1,140 | **0.968636** | 0.969353 | 0.969162 |
+
+Power wins on Pinnacle, the sharper book, and is the default. The methods differ by < 1e-4 nats on Pinnacle's thin margins, so the choice barely matters for the forecasts.
+
+**M1 fit (`fplh models fit-m1 --before 2022-07-01 --restarts 2`).** One-step-ahead predictive log-likelihood of goals per match, 2014/15–2021/22:
+
+| Parameters | Log-likelihood / match |
+|---|---|
+| Defaults | −2.90762 |
+| Fitted, goals only (ω = 0) | −2.90591 |
+| Fitted, without the E1 promoted-team prior | −2.90289 |
+| **Fitted** | **−2.89881** |
+
+**Walk-forward evaluation (`fplh evaluate phase2 --season 2022-23 --season 2023-24 --season 2024-25`).** Horizon 1 (the next gameweek), forecasts made at each FPL deadline from only what was observable then. 1,057 fixtures had a pre-match price observable at the deadline; every model is scored on the same fixtures.
+
+| Model | RPS | 1X2 log loss | Scoreline log loss |
+|---|---|---|---|
+| Market only (deadline prices, power de-vig, G1 inversion) | **0.19399** | **0.95200** | 2.98453 |
+| M3 fused (market + M1) | 0.19419 | 0.95251 | **2.98280** |
+| M1, default hyper-parameters (A3) | 0.19685 | 0.96302 | 2.99026 |
+| M1 + G1 | 0.19711 | 0.96161 | 2.99407 |
+| M1 + G3 | 0.19715 | 0.96224 | 2.99284 |
+| M1 + G2 | 0.19716 | 0.96222 | 2.99359 |
+| M1 + G0 | 0.19717 | 0.96239 | 2.99325 |
+| M1, goals only (A2) | 0.20038 | 0.97144 | 3.01006 |
+
+For reference, the A0 de-vigged *closing* prices score about 0.192 RPS on these seasons (§2.2); they include team news and late money that no deadline-time forecast can see.
+
+Comparisons (a − b; negative favours a; 95 % gameweek-block bootstrap CI; DM p-value):
+
+| a | b | RPS | Scoreline log loss | 1X2 log loss |
+|---|---|---|---|---|
+| M1 + G1 | M1 + G0 | −0.00009 [−0.00023, 0.00004], p 0.23 | +0.0003 [−0.0018, 0.0024], p 0.82 | −0.0011 [−0.0027, 0.0005], p 0.20 |
+| M1 + G2 | M1 + G0 | −0.00002 [−0.00005, 0.00002], p 0.40 | +0.0004 [−0.0003, 0.0010], p 0.29 | −0.0002 [−0.0006, 0.0001], p 0.19 |
+| M1 + G3 | M1 + G0 | −0.00002 [−0.00006, 0.00003], p 0.47 | −0.0005 [−0.0012, 0.0002], p 0.15 | −0.0002 [−0.0004, 0.0001], p 0.17 |
+| **M1 (goals + xG)** | **M1 goals only (A2)** | **−0.0041 [−0.0071, −0.0018], p 0.003** | **−0.0208 [−0.0360, −0.0095], p 0.003** | **−0.0117 [−0.0215, −0.0047], p 0.008** |
+| M1 tuned | M1 default (A3) | +0.0013 [−0.0014, 0.0048], p 0.43 | +0.0061 [−0.0051, 0.0188], p 0.33 | +0.0019 [−0.0060, 0.0122], p 0.68 |
+| M3 fused | market only (A1, exit gate) | +0.00012 [−0.00046, 0.00071], p 0.70 | −0.0022 [−0.0049, 0.0004], p 0.10 | +0.0002 [−0.0018, 0.0021], p 0.83 |
+| M3 fused | M1 + G1 | −0.0020 [−0.0046, 0.0008], p 0.14 | −0.0072 [−0.0202, 0.0077], p 0.29 | −0.0065 [−0.0150, 0.0028], p 0.15 |
+
+Fusion as fitted on 2017/18–2021/22 (ridge 1.0 chosen by leave-one-season-out NLL: 2.87886, 2.87872, **2.87846**, 2.87865 for ridge 0.01, 0.1, 1, 10): market weight w = σ(1.58 − 0.0002 log(1 + τ) − 0.00005 liq) ≈ 0.83 at every deadline, home bias −0.016, away bias +0.001.
+
+### 3.3 Findings from real data
+
+- **xG is worth having (A2).** Goals + xG beats goals only on every metric, with the CIs excluding zero (RPS −0.0041, DM p = 0.003). At the optimum the Gamma xG likelihood enters with weight ω = 0.12 (Gamma shape κ = 16), next to the full-weight Poisson goals likelihood.
+- **Tuning barely matters at deadlines (A3).** The fitted hyper-parameters improve the one-step-ahead likelihood (−2.8988 vs −2.9076), but walk-forward at deadlines they are indistinguishable from the defaults (RPS +0.0013, CI [−0.0014, 0.0048]).
+- **G1–G3 add nothing over G0.** Dixon–Coles ρ = −0.045, bivariate-Poisson λ₃ → 0 and COM-Poisson ν = 1.018 are all close to the Poisson case; every CI includes zero. G0 stays the default; G1 is used for market inversion and fusion because its ρ is the only non-trivial dependence parameter.
+- **Fitting M1 needs restarts.** With the two E1 slopes, M1 tunes 14 hyper-parameters. One 400-iteration Nelder–Mead run stopped at −2.90002, worse than a point it had not found (−2.89975). Two warm-started chains with restarts agree to 1e-4. At the optimum `sigma_a` sits at its lower bound (attack ratings barely drift within a season) and `season_regress` at 1 (no summer regression toward the mean).
+- **The filter must run single-threaded.** It makes thousands of tiny linear-algebra calls, and BLAS threads only contend: one pass over 3,040 matches took 76 s with 4 threads and 2.4 s with one.
+- **The market's goal bias is season noise.** The home-goal log bias of de-vigged pre-match prices ranges from −0.13 (2024/25) to +0.04 (2022/23, 2023/24), with −0.10 in the behind-closed-doors season 2020/21. The first fusion fit trained on three seasons with a fixed ridge of 0.01: it put all its weight on the market (α₀ = 11.6) and learned a home bias of −0.06, making it slightly worse than market-only (RPS +0.0008, CI [−0.0003, 0.0020]). Training on five seasons with the ridge chosen by leave-one-season-out CV within them (no evaluated season involved) shrinks the bias to −0.016 and gives M1 about 17 % weight. This change was made after seeing the first result; both runs are reported here.
+- **M1 adds little to deadline prices (A1).** Fused vs market-only is a tie on RPS and 1X2 log loss. Fused is better on the scoreline grid (−0.0022), but its CI still includes zero (p = 0.10). The market already prices most of what goals and xG know; Phase 3 adds what it may not (minutes, line-ups, player-level xG).
+- **Market prices are inverted under the grid's own goal model**, so a market-only forecast reproduces the market's 1X2 exactly, and the best-price composite (`market_max`) is never treated as a book.
+
+### 3.4 Open items
+
+- Squad market-value shift for the summer prior (needs a squad-value source).
+- Re-run `fplh models fit-m1` and `fplh evaluate phase2` whenever silver changes materially; both are reproducible from the CLI (about 70 min each on 4 cores).
+
+Exit: fused ≥ market-only on RPS (paired bootstrap), and G0–G3 results logged. **Met as non-inferiority:** fused − market RPS is +0.00012 with 95 % CI [−0.00046, +0.00071] (DM p = 0.70), so fused is not worse, and it is the best model on scoreline log loss, but it is **not** significantly better than the market on any metric. The G0–G3 ladder and A1–A3 are logged to the leaderboard.
 
 ## 4. Phase 3: Match and player level
 
