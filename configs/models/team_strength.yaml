@@ -1,0 +1,23 @@
+# M1 team-strength hyper-parameters (models/team_strength.py).
+# Fitted by `fplh models fit-m1`: one-step-ahead predictive log-likelihood of goals on
+# 2014/15–2021/22 (training period, ARCHITECTURE.md §11.1): −2.8997 per match
+# (defaults −2.9076; goals only, ω = 0: −2.9178).
+version: 1
+trained_on:
+- 2014-15
+- 2021-22
+params:
+  c0: 0.3
+  eta: 0.201235
+  phi_year: 0.99235
+  sigma_a: 0.051319
+  sigma_d: 0.105646
+  sigma_c: 0.05
+  omega: 0.143554
+  kappa: 15.195849
+  season_regress: 0.997474
+  season_var: 0.004331
+  promoted_a: -0.400329
+  promoted_d: -0.187519
+  promoted_var: 0.03
+  init_var: 0.1

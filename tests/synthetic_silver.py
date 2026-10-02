@@ -106,7 +106,20 @@ def make(seed: int = 0) -> dict[str, pd.DataFrame]:
                 }
             )
     snap = pd.DataFrame(snaps)
-    return {"dim_fixture": dim_fixture, "fact_player_match": pm, "snap_fpl_player": snap}
+    us = dim_fixture.assign(
+        understat_match_id=range(len(dim_fixture)),
+        is_result=True,
+        home_xg=dim_fixture["home_goals"] * 0.8 + 0.3,
+        away_xg=dim_fixture["away_goals"] * 0.8 + 0.3,
+        event_at=dim_fixture["kickoff_at"],
+        observed_at=dim_fixture["kickoff_at"] + pd.Timedelta(hours=24),
+    )
+    return {
+        "dim_fixture": dim_fixture,
+        "fact_player_match": pm,
+        "snap_fpl_player": snap,
+        "us_match": us,
+    }
 
 
 def deadlines(frames: dict[str, pd.DataFrame]) -> list[pd.Timestamp]:

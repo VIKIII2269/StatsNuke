@@ -47,11 +47,13 @@ backfill_app = typer.Typer(no_args_is_help=True, help="Download historical files
 report_app = typer.Typer(no_args_is_help=True, help="Data availability reports.")
 silver_app = typer.Typer(no_args_is_help=True, help="Build validated silver tables.")
 evaluate_app = typer.Typer(no_args_is_help=True, help="Walk-forward evaluation and checks.")
+models_app = typer.Typer(no_args_is_help=True, help="Fit model hyper-parameters.")
 app.add_typer(collect_app, name="collect")
 app.add_typer(backfill_app, name="backfill")
 app.add_typer(report_app, name="report")
 app.add_typer(silver_app, name="silver")
 app.add_typer(evaluate_app, name="evaluate")
+app.add_typer(models_app, name="models")
 app.add_typer(rules_app, name="rules")
 app.add_typer(golden_app, name="golden")
 
@@ -441,6 +443,68 @@ def evaluate_leakage(
     typer.echo(f"{len(deadlines)} deadlines checked, {len(problems)} problems")
     if problems:
         raise typer.Exit(1)
+
+
+@models_app.command("fit-m1")
+def models_fit_m1(
+    before: Annotated[
+        str, typer.Option(help="Train on matches observed before this date.")
+    ] = "2022-07-01",
+    maxiter: Annotated[int, typer.Option(help="Nelder-Mead iterations.")] = 400,
+) -> None:
+    """Tune M1 hyper-parameters by one-step-ahead predictive likelihood; writes
+    configs/models/team_strength.yaml."""
+    import pandas as pd
+    import yaml
+
+    from fplh.evaluate.team_level import championship, observed_matches, season_teams
+    from fplh.features.information_set import InformationSet, SilverStore
+    from fplh.models.team_strength import (
+        TeamStrengthParams,
+        fit_hyperparameters,
+        params_to_dict,
+        run_filter,
+    )
+
+    info = InformationSet.at(
+        pd.Timestamp(before, tz="UTC"), SilverStore(Lake(get_settings().lake_uri))
+    )
+    matches, teams, e1 = observed_matches(info), season_teams(info), championship(info)
+    default = run_filter(matches, TeamStrengthParams(), teams, championship=e1)
+    params, obj = fit_hyperparameters(matches, teams, championship=e1, maxiter=maxiter)
+    typer.echo(f"Championship priors available for {len(e1)} promoted team-seasons")
+    seasons = sorted(matches["season"].unique())
+    doc = (
+        "# M1 team-strength hyper-parameters (models/team_strength.py).\n"
+        f"# Fitted by `fplh models fit-m1 --before {before}`: one-step-ahead predictive\n"
+        f"# log-likelihood of goals on {seasons[0]}–{seasons[-1]}: {-obj:.4f} per match (defaults "
+        f"{default.log_lik / max(default.n_scored, 1):.4f}).\n"
+    )
+    body = {
+        "version": 1,
+        "trained_on": [seasons[0], seasons[-1]],
+        "params": {k: round(v, 6) for k, v in params_to_dict(params).items()},
+    }
+    path = get_settings().configs_dir / "models" / "team_strength.yaml"
+    path.write_text(doc + yaml.safe_dump(body, sort_keys=False))
+    typer.echo(f"wrote {path}: log-lik/match {-obj:.4f}")
+
+
+@evaluate_app.command("phase2")
+def evaluate_phase2_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+) -> None:
+    """G0–G3 ladder, A2/A3 ablations and (with odds) market vs fused, walk-forward."""
+    import pandas as pd
+
+    from fplh.evaluate.phase2 import evaluate_phase2
+
+    result = evaluate_phase2(Lake(get_settings().lake_uri), season)
+    with pd.option_context("display.width", 200, "display.max_columns", 20):
+        typer.echo(f"goal-model parameters (fitted on training seasons): {result.goal_models}")
+        typer.echo(f"fusion: {result.fusion}")
+        typer.echo(result.summary.to_string(index=False))
+        typer.echo(result.comparisons.to_string(index=False))
 
 
 @app.command("version")
