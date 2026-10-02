@@ -1,7 +1,8 @@
 """A0 baseline (ARCHITECTURE.md §11.7): market-only rates, naive minutes, raw per-90.
 
-* **Match:** multiplicative de-vig of the latest pre-match 1X2 and O/U 2.5 prices
-  observed at the deadline (market average preferred, then Pinnacle, then any book).
+* **Match:** de-vig (multiplicative for A0) of the latest pre-match 1X2 and O/U 2.5
+  prices observed at the deadline (market average preferred, then Pinnacle, then any
+  single book; the market maximum is not a book and is never used).
 * **Player:** expected FPL points from
   - minutes: the last 3 registered fixtures this season (P(60+), P(1–59), mean minutes);
   - events: season-to-date per-90 rates × expected minutes × the rules-config values;
@@ -19,15 +20,18 @@ import pandas as pd
 from fplh.features.builders import naive_minutes, season_totals
 from fplh.features.information_set import InformationSet
 from fplh.features.spine import SPINE_KEYS
-from fplh.models.market import devig_multiplicative, expected_floor_div, invert_poisson
+from fplh.models.market import devig, expected_floor_div, invert_poisson
 from fplh.rules.config import Rules
 
 BOOK_PRIORITY = ("market_avg", "pinnacle", "bet365")
+NOT_A_BOOK = frozenset({"market_max"})  # best price per outcome across books
 LEAGUE_AVG_RATES = (1.5, 1.2)  # home, away goals per match (EPL long-run ≈)
 FIXTURE_KEYS = ["fixture_uid", "deadline_at", "horizon"]
 
 
-def market_probabilities(info: InformationSet, fixtures: pd.DataFrame) -> pd.DataFrame:
+def market_probabilities(
+    info: InformationSet, fixtures: pd.DataFrame, method: str = "multiplicative"
+) -> pd.DataFrame:
     """Per fixture: de-vigged p_home/p_draw/p_away, p_over25, rates, market flag."""
     out = fixtures[["fixture_uid"]].drop_duplicates().copy()
     odds = info.table("snap_odds")
@@ -41,7 +45,7 @@ def market_probabilities(info: InformationSet, fixtures: pd.DataFrame) -> pd.Dat
         )
         rows = []
         for uid, g in latest.groupby("fixture_uid"):
-            books = list(g["bookmaker"].unique())
+            books = list(set(g["bookmaker"]) - NOT_A_BOOK)
             order = [b for b in BOOK_PRIORITY if b in books] + sorted(
                 set(books) - set(BOOK_PRIORITY)
             )
@@ -51,7 +55,7 @@ def market_probabilities(info: InformationSet, fixtures: pd.DataFrame) -> pd.Dat
                     "price"
                 ]
                 if {"home", "draw", "away"} <= set(x.index):
-                    p = devig_multiplicative(x[["home", "draw", "away"]].to_numpy())
+                    p = devig(x[["home", "draw", "away"]].to_numpy(), method)
                     row.update(p_home=p[0], p_draw=p[1], p_away=p[2], book=book)
                     break
             for book in order:
@@ -59,7 +63,7 @@ def market_probabilities(info: InformationSet, fixtures: pd.DataFrame) -> pd.Dat
                     (g["bookmaker"] == book) & (g["market"] == "total") & (g["line"] == 2.5)
                 ].set_index("outcome")["price"]
                 if {"over", "under"} <= set(t.index):
-                    row["p_over25"] = devig_multiplicative(t[["over", "under"]].to_numpy())[0]
+                    row["p_over25"] = devig(t[["over", "under"]].to_numpy(), method)[0]
                     break
             rows.append(row)
         found = pd.DataFrame(rows, columns=["fixture_uid", *cols])

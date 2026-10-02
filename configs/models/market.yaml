@@ -1,0 +1,5 @@
+# Default de-vig method for pre-match prices (models/market.py, ARCHITECTURE.md §7.3).
+# Chosen by `fplh models fit-devig --before 2022-07-01`: mean 1X2 log loss of pinnacle
+# closing prices over 3800 EPL matches: multiplicative 0.95324, power 0.95319, shin 0.95324.
+version: 1
+devig: power

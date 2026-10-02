@@ -30,6 +30,15 @@ Official FPL points are reproduced exactly for all 254,119 player-fixtures from 
 Every Phase 1 gate passes on the full real data: 100 % player coverage across sources and exact
 official points; see [the plan, §2.2](docs/IMPLEMENTATION_PLAN.md#22-results-on-real-data).
 
+**Phase 2 (team level)** is built and evaluated walk-forward on 2022/23–2024/25:
+
+- **de-vig** (multiplicative, power, Shin), with the default chosen by closing-price calibration;
+- the **G0–G3 scoreline models** with market inversion;
+- the **M1 dynamic team-strength filter** (goals + xG, Championship prior for promoted teams), with a NumPyro NUTS reference;
+- **M3 fusion** of market and model rates.
+
+xG improves M1 significantly. M1 alone reaches RPS 0.197 against the market's 0.194 at the deadline. The fused forecast ties the market on RPS (the exit gate, met as non-inferiority) and is best on scoreline log loss; see [the plan, §3.2](docs/IMPLEMENTATION_PLAN.md#32-results-on-real-data).
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 if needed).
@@ -48,6 +57,11 @@ uv run fplh silver build                # normalise, resolve entities, run quali
 uv run fplh golden check-silver         # official points reproduced for every season
 uv run fplh evaluate leakage --season 2024-25
 uv run fplh evaluate a0 --season 2024-25
+
+# Phase 2: team level (uv sync --extra bayes for the NUTS reference)
+uv run fplh models fit-devig --before 2022-07-01     # writes configs/models/market.yaml
+uv run fplh models fit-m1 --before 2022-07-01         # writes configs/models/team_strength.yaml (~70 min)
+uv run fplh evaluate phase2 --season 2022-23 --season 2023-24 --season 2024-25
 
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures

@@ -1,17 +1,22 @@
-"""Market probabilities (ARCHITECTURE.md §7.3), minimal Phase 1 version.
+"""Market probabilities (ARCHITECTURE.md §7.3, M2).
 
-Multiplicative de-vig and a closed-form independent-Poisson inversion of 1X2 (+ O/U 2.5)
-prices into scoring rates. Phase 2 adds power/Shin de-vig and the richer benchmarks.
+De-vig methods (multiplicative, power, Shin) turn bookmaker odds into probabilities; the
+independent-Poisson inversion turns 1X2 (+ O/U 2.5) probabilities into scoring rates.
+Inversion under the dependent goal models (G1–G3) lives in ``goal_benchmarks``.
 """
 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
-from scipy.optimize import minimize
+import yaml
+from scipy.optimize import brentq, minimize
 from scipy.stats import poisson
+
+from fplh.settings import get_settings
 
 MAX_GOALS = 10
 
@@ -20,6 +25,83 @@ def devig_multiplicative(prices: npt.ArrayLike) -> npt.NDArray[np.float64]:
     """Decimal odds (…, k) → probabilities summing to 1 along the last axis."""
     implied = 1.0 / np.asarray(prices, dtype=float)
     out: npt.NDArray[np.float64] = implied / implied.sum(axis=-1, keepdims=True)
+    return out
+
+
+def devig_power(prices: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """p_k = π_k^c with c solving Σ π_k^c = 1 (shades longshots more)."""
+    pi = 1.0 / np.asarray(prices, dtype=float)
+    if abs(pi.sum() - 1.0) < 1e-12:
+        return pi
+    c = brentq(lambda c: float(np.sum(pi**c)) - 1.0, 1e-6, 50.0)
+    out: npt.NDArray[np.float64] = pi**c
+    return out / out.sum()
+
+
+def devig_shin(prices: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """Shin (1993): p_k = (√(z² + 4(1−z)π_k²/S) − z) / (2(1−z)), z solving Σ p_k = 1.
+
+    ``z`` is the implied share of informed money; the method corrects the
+    favourite–longshot bias and is usually the best calibrated on 1X2 markets.
+    """
+    pi = 1.0 / np.asarray(prices, dtype=float)
+    s = pi.sum()
+
+    def probs(z: float) -> npt.NDArray[np.float64]:
+        out: npt.NDArray[np.float64] = (np.sqrt(z**2 + 4 * (1 - z) * pi**2 / s) - z) / (2 * (1 - z))
+        return out
+
+    if s <= 1.0:
+        return pi / s
+    z = brentq(lambda z: float(probs(z).sum()) - 1.0, 0.0, 0.999)
+    return probs(z)
+
+
+DEVIG = {"multiplicative": devig_multiplicative, "power": devig_power, "shin": devig_shin}
+
+
+def devig(prices: npt.ArrayLike, method: str = "multiplicative") -> npt.NDArray[np.float64]:
+    """De-vig one market (1-D prices) with the named method."""
+    return DEVIG[method](prices)
+
+
+def load_devig_method(path: Path | None = None) -> str:
+    """The configured default de-vig method (``fplh models fit-devig``), else multiplicative."""
+    path = path or get_settings().configs_dir / "models" / "market.yaml"
+    if not path.exists():
+        return "multiplicative"
+    method = str(yaml.safe_load(path.read_text())["devig"])
+    if method not in DEVIG:
+        raise ValueError(f"{path}: unknown de-vig method {method!r}; expected one of {list(DEVIG)}")
+    return method
+
+
+def shin_z(prices: npt.ArrayLike) -> float:
+    """Shin's implied informed-trading share ``z`` for one market."""
+    pi = 1.0 / np.asarray(prices, dtype=float)
+    s = pi.sum()
+    if s <= 1.0:
+        return 0.0
+    return float(
+        brentq(
+            lambda z: (
+                float(np.sum((np.sqrt(z**2 + 4 * (1 - z) * pi**2 / s) - z) / (2 * (1 - z)))) - 1.0
+            ),
+            0.0,
+            0.999,
+        )
+    )
+
+
+def devig_calibration(prices: npt.ArrayLike, outcome: npt.ArrayLike) -> dict[str, float]:
+    """Mean log loss of each de-vig method on (n, k) closing prices vs observed outcomes
+    (class indices). The default method is the one with the lowest loss (§7.3)."""
+    p = np.asarray(prices, dtype=float)
+    y = np.asarray(outcome, dtype=int)
+    out = {}
+    for name, fn in DEVIG.items():
+        probs = np.array([fn(row) for row in p])
+        out[name] = float(-np.mean(np.log(np.clip(probs[np.arange(len(y)), y], 1e-15, 1))))
     return out
 
 
