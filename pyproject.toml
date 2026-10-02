@@ -17,6 +17,7 @@ dependencies = [
     "rapidfuzz>=3.14.6",
     "scipy>=1.18.1",
     "tenacity>=8.3",
+    "threadpoolctl>=3.5",
     "typer>=0.12",
 ]
 
@@ -72,7 +73,7 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*", "numpyro.*", "jax.*"]
+module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*", "numpyro.*", "jax.*", "threadpoolctl"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

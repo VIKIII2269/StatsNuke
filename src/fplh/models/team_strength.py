@@ -29,6 +29,7 @@ import numpy.typing as npt
 import pandas as pd
 from scipy.optimize import minimize
 from scipy.special import gammaln
+from threadpoolctl import threadpool_limits
 
 Array = npt.NDArray[np.float64]
 DAY = 1.0 / 365.0
@@ -321,17 +322,20 @@ def run_filter(
         df["away_xg"].astype(float),
         strict=True,
     )
-    for season, kickoff, home, away, hg, ag, hx, ax in rows:
-        if season != f.season:
-            f.start_season(season, season_teams[season])
-        f.update(
-            home,
-            away,
-            pd.Timestamp(kickoff),
-            (hg, ag),
-            (hx, ax),
-            score=season >= score_from and season != first,
-        )
+    # Thousands of tiny linear-algebra calls: BLAS threads only contend (25x slower on 4
+    # cores), so the filter runs single-threaded.
+    with threadpool_limits(limits=1):
+        for season, kickoff, home, away, hg, ag, hx, ax in rows:
+            if season != f.season:
+                f.start_season(season, season_teams[season])
+            f.update(
+                home,
+                away,
+                pd.Timestamp(kickoff),
+                (hg, ag),
+                (hx, ax),
+                score=season >= score_from and season != first,
+            )
     return f
 
 
