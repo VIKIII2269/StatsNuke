@@ -5,7 +5,10 @@
 
 τ is hours between the price snapshot and kickoff, ``liq`` a liquidity proxy (bookmakers
 quoting, minus overround). Without a market price w = 0. Parameters minimise the
-scoreline-grid negative log-likelihood under a fitted goal model, with a ridge penalty.
+scoreline-grid negative log-likelihood under a fitted goal model, with a ridge penalty on
+everything but α₀. ``fit_fusion_cv`` picks the ridge by leave-one-season-out
+cross-validation: the market's goal bias swings by ±0.1 in log terms from season to
+season, so an unshrunk b_k mostly learns the training seasons' noise.
 """
 
 from __future__ import annotations
@@ -63,16 +66,18 @@ class Fusion:
             out.append(np.exp(w * mkt + (1 - w) * mod + b))
         return out[0], out[1], w
 
+    def nll(self, df: pd.DataFrame) -> float:
+        """Mean scoreline negative log-likelihood on ``df`` (FUSION_COLUMNS + goals)."""
+        lh, la, _ = self.rates(df)
+        hg, ag = df["home_goals"].to_numpy(int), df["away_goals"].to_numpy(int)
+        return -float(np.mean(self.goal_model.log_prob(lh, la, hg, ag)))
+
     def fit(self, df: pd.DataFrame, ridge: float = 0.01) -> Fusion:
         """``df`` has FUSION_COLUMNS plus home_goals, away_goals."""
-        hg, ag = df["home_goals"].to_numpy(int), df["away_goals"].to_numpy(int)
 
         def nll(x: Array) -> float:
             cand = Fusion((x[0], x[1], x[2]), (x[3], x[4]), self.goal_model)
-            lh, la, _ = cand.rates(df)
-            return -float(np.mean(self.goal_model.log_prob(lh, la, hg, ag))) + ridge * float(
-                np.sum(x[1:] ** 2)
-            )
+            return cand.nll(df) + ridge * float(np.sum(x[1:] ** 2))
 
         x0 = np.array([*self.alpha, *self.bias])
         res = minimize(
@@ -80,6 +85,34 @@ class Fusion:
         )
         x = res.x
         return Fusion((x[0], x[1], x[2]), (x[3], x[4]), self.goal_model)
+
+
+RIDGES = (0.01, 0.1, 1.0, 10.0)
+
+
+@dataclass
+class FusionFit:
+    fusion: Fusion
+    ridge: float
+    cv: dict[float, float]  # ridge → mean held-out-season NLL
+
+
+def fit_fusion_cv(df: pd.DataFrame, start: Fusion, ridges: tuple[float, ...] = RIDGES) -> FusionFit:
+    """Choose the ridge by leave-one-season-out NLL (``df`` has a ``season`` column),
+    then refit on every season."""
+    seasons = sorted(df["season"].unique())
+    if len(seasons) < 2:
+        return FusionFit(start.fit(df, ridges[0]), ridges[0], {})
+    cv = {
+        r: float(
+            np.mean(
+                [start.fit(df[df["season"] != s], r).nll(df[df["season"] == s]) for s in seasons]
+            )
+        )
+        for r in ridges
+    }
+    best = min(ridges, key=lambda r: cv[r])
+    return FusionFit(start.fit(df, best), best, cv)
 
 
 def liquidity(n_books: pd.Series, overround: pd.Series) -> pd.Series:

@@ -33,7 +33,7 @@ from fplh.evaluate.walk_forward import run_walk_forward
 from fplh.features.information_set import InformationSet, SilverStore
 from fplh.features.spine import historical_deadlines, target_fixtures
 from fplh.lake.storage import Lake
-from fplh.models.fusion import Fusion
+from fplh.models.fusion import Fusion, FusionFit, fit_fusion_cv
 from fplh.models.goal_benchmarks import GoalModel, benchmarks
 from fplh.models.market import DEVIG as DEVIG_METHODS
 from fplh.models.market import devig_calibration, load_devig_method
@@ -179,12 +179,15 @@ def evaluate_phase2(lake: Lake, seasons: list[str], *, log: bool = True) -> Phas
     if not market.predictions.empty:
         runs["market-only"] = market.predictions
         run_ids["market-only"] = market.run_id
-        fusion = _fit_fusion(store, params, goal_models["G1"], start, method)
+        fitted = _fit_fusion(store, params, goal_models["G1"], start, method)
+        fusion = fitted.fusion
         fusion_info = {
             "available": True,
             "devig": method,
-            "alpha": fusion.alpha,
-            "bias": fusion.bias,
+            "alpha": tuple(round(float(a), 6) for a in fusion.alpha),
+            "bias": tuple(round(float(b), 6) for b in fusion.bias),
+            "ridge": fitted.ridge,
+            "cv_nll": {r: round(v, 6) for r, v in fitted.cv.items()},
         }
         fused = run_walk_forward(
             store,
@@ -254,15 +257,16 @@ def _fit_fusion(
     gm: GoalModel,
     before: pd.Timestamp,
     method: str = "multiplicative",
-) -> Fusion:
-    """Fusion weights from training-period fixtures: M1 rates at each training deadline
-    plus the market prices observable then."""
+    n_seasons: int = 5,
+) -> FusionFit:
+    """Fusion weights from the last ``n_seasons`` training seasons: M1 rates at each
+    deadline plus the market prices observable then; ridge by leave-one-season-out CV."""
     dim = store.get("dim_fixture")
     seasons = [
         s
         for s in sorted(dim.loc[dim["round"].notna(), "season"].unique())
         if historical_deadlines(dim, s)["deadline_at"].max() < before
-    ][-3:]
+    ][-n_seasons:]
     rows = []
     for s in seasons:
         for d in historical_deadlines(dim, s)["deadline_at"]:
@@ -276,10 +280,11 @@ def _fit_fusion(
                 fx[["fixture_uid"]]
                 .merge(mod, on="fixture_uid")
                 .merge(mk, on="fixture_uid", how="left")
+                .assign(season=s)
             )
     train = (
         pd.concat(rows)
         .merge(dim[["fixture_uid", "home_goals", "away_goals"]], on="fixture_uid")
         .dropna(subset=["home_goals"])
     )
-    return Fusion((1.0, 0.0, 0.0), (0.0, 0.0), gm).fit(train)
+    return fit_fusion_cv(train, Fusion((1.0, 0.0, 0.0), (0.0, 0.0), gm))
