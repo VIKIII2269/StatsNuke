@@ -13,7 +13,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
 | 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
 | 2 | Team level (M1–M3, G0–G3) | **Done**: exit gate met as non-inferiority, fused ties the market (§3.2) |
-| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline and BPS rules built (§4.1) |
+| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline, BPS rules and benchmarks built (§4.1–4.2) |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
 | 5 | Extensions, each gated by an ablation | Planned |
 | 6 | Operations (VPS, Dagster, Telegram, monitoring) | Planned |
@@ -288,6 +288,7 @@ Decisions:
 | # | Ticket | Acceptance criteria |
 |---|---|---|
 | 3.0 | Event timeline (`lake/silver/timeline.py`, `fact_match_event`), lineup, goal-timeline and substitution gates, `InformationSet.restrict`, typed BPS tables, bonus eligibility mask | **Built** (§4.1) |
+| 3.0b | Benchmarks: OpenFPL re-implementation (`features/openfpl.py`, `models/openfpl.py`), last-5 floor, player scoring (`evaluate/player_level.py`), `fplh evaluate phase3-benchmarks` | **Built** (§4.2) |
 | 3.1 | `models/goal_process.py` (G4–G6): piecewise-exponential Poisson GLM, hierarchical state effects, red-card hazard, frailty, stoppage-time model | Dispersion direction reported (§11.6); each G-step beats the previous one or is dropped |
 | 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, L-BFGS-B inversion | Market reproduction error within tolerance; cached per model version |
 | 3.3 | `models/minutes.py` (M4): staged LightGBM with monotone constraints, isotonic calibration, small-sample prior blend, horizon drift, news overlay (gap 1) | ECE ≤ 0.02 on start and 60+; A4 logged |
@@ -324,6 +325,28 @@ Up to 2 concussion substitutes have been allowed since February 2021. They accou
 - The 60+ minutes award applies from exactly 60 minutes.
 - The penalty-save weight fell from 15 (estimates 14.2–16.0 through 2023/24) to about 8 (8.9 in 2024/25, 7.0 in 2025/26), so 8 is recorded from 2024/25.
 - Goals, clean sheets and penalty misses carry the BPS of correlated actions the table scores separately (shots on target, big chances). M10 therefore reconstructs BPS with the effective weights and keeps the rest in its residual.
+
+### 4.2 The bars the simulator must clear
+
+`fplh evaluate phase3-benchmarks --season 2022-23 --season 2023-24 --season 2024-25` runs every benchmark walk-forward at horizon 1. All models are scored on the same 80,973 player-fixtures, of which 33,208 had minutes > 0, over 110 gameweek blocks. Runtime is 10 minutes.
+
+**OpenFPL replica.** OpenFPL's feature set rebuilt on silver: trailing 1/3/5/10/38-match means of FPL, Understat, team and opponent statistics, 211 features. It trains one XGBoost model per position, refit every 4 deadlines. Each training row is featurised at its own round deadline by `features/trailing.py`, which computes the as-of features exactly. A test checks that the batch features equal the per-deadline features. Tree counts per position (GK 135, DEF 166, MID 114, FWD 80) come from early stopping on 2021/22.
+
+| Model | MSE | MAE | Spearman within position | Spearman, played | Top-10 precision |
+|---|---|---|---|---|---|
+| **OpenFPL replica** | **3.661** | **0.996** | 0.696 | **0.371** | **0.429** |
+| A0 (season per-90 × naive minutes, market CS) | 4.015 | 1.001 | **0.714** | 0.331 | 0.410 |
+| Naive last-5 average | 4.354 | 1.050 | 0.681 | 0.283 | 0.384 |
+
+Paired differences in MSE (95 % gameweek-block CI, DM p):
+
+| Comparison | Difference | 95 % CI | DM p |
+|---|---|---|---|
+| Replica − last 5 | −0.707 | [−0.770, −0.646] | < 1e-40 |
+| Replica − A0 | −0.374 | [−0.455, −0.308] | < 1e-16 |
+| Last 5 − A0 | +0.333 | [0.279, 0.385] | |
+
+The replica clears both floors, so the simulator's exit bar is MSE 3.66 on these rows. A0 still ranks all rows best (Spearman 0.714): its minutes model separates benched from starting players. The replica ranks players who played better (0.371 vs 0.331). The simulator needs both.
 
 ## 5. Phase 4: Decisions
 

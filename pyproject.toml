@@ -19,6 +19,7 @@ dependencies = [
     "tenacity>=8.3",
     "threadpoolctl>=3.5",
     "typer>=0.12",
+    "xgboost-cpu>=2.1",
 ]
 
 [project.optional-dependencies]
@@ -73,7 +74,7 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*", "numpyro.*", "jax.*", "threadpoolctl"]
+module = ["fsspec.*", "pyarrow.*", "scipy.*", "mlflow.*", "numpyro.*", "jax.*", "threadpoolctl", "xgboost.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
