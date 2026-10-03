@@ -20,6 +20,7 @@ import pandas as pd
 from fplh.features.builders import naive_minutes, season_totals
 from fplh.features.information_set import InformationSet
 from fplh.features.spine import SPINE_KEYS
+from fplh.features.trailing import trailing_means
 from fplh.models.market import devig, expected_floor_div, invert_poisson
 from fplh.rules.config import Rules
 
@@ -160,4 +161,21 @@ class A0Player:
         out["p_60"] = p60
         out["expected_minutes"] = mins
         out["market_available"] = f["market_available"].to_numpy()
+        return out
+
+
+@dataclass
+class NaiveLast5:
+    """Naive floor (ARCHITECTURE.md §11.3): mean points over the player's last 5
+    registered fixtures observable at the deadline (0 when there are none)."""
+
+    window: int = 5
+    name: str = "naive_last5"
+    version: str = "1"
+
+    def predict(self, info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
+        pm = info.table("fact_player_match")
+        m = trailing_means(pm, "player_uid", ("total_points",), (self.window,), spine)
+        out = spine[[*SPINE_KEYS, "position"]].copy()
+        out["expected_points"] = m[f"total_points_{self.window}"].fillna(0.0).to_numpy()
         return out

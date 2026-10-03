@@ -570,6 +570,21 @@ def models_fit_devig(
     typer.echo(f"wrote {path}: devig = {method}")
 
 
+@evaluate_app.command("phase3-benchmarks")
+def evaluate_phase3_benchmarks(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+) -> None:
+    """Naive floors and the OpenFPL re-implementation, walk-forward (Phase 3 bars)."""
+    import pandas as pd
+
+    from fplh.evaluate.benchmarks import evaluate_benchmarks
+
+    result = evaluate_benchmarks(Lake(get_settings().lake_uri), season)
+    with pd.option_context("display.width", 200, "display.max_columns", 20):
+        typer.echo(result.summary.to_string(index=False))
+        typer.echo(result.comparisons.to_string(index=False))
+
+
 @evaluate_app.command("phase2")
 def evaluate_phase2_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
