@@ -21,14 +21,27 @@ defensive_contribution:
   MID_FWD: {actions: [clearance, block, interception, tackle, recovery], threshold: 12, points: 2}
   cap_per_match: 2
 bonus:             {ranks: [3, 2, 1], tie_rule: official}
-# 2026/27 Bonus Points System changes (ARCHITECTURE.md §5.4); used by M10 in Phase 3.
+# Bonus Points System weights for the events the simulator generates (M10). Official
+# base table plus the 2026/27 changes (ARCHITECTURE.md §5.4).
 bps:
+  minutes_lt_60: 3
+  minutes_gte_60: 6
+  goal: {GK: 12, DEF: 12, MID: 18, FWD: 24}
+  assist: 9
+  clean_sheet: {GK: 12, DEF: 12}
+  goal_conceded: {GK: -4, DEF: -4}
+  save: 2                       # a save without location; inside-box saves score 3 (below)
+  penalty_save: 8               # 7 + 1 for big chance saved
+  penalty_miss: -6
+  yellow_card: -3
+  red_card: -9
+  own_goal: -6
+  # 2026/27 changes to actions the simulator does not generate (left to M10's residual)
   tackled_penalty: 0            # previously -1 per time tackled
   cbi: {per: 3, bps: 1}         # previously 1 BPS per 2 CBI
   gk_save_inside_box: 3
   gk_save_other: 2              # replaces "outside the box" = 2
   gk_big_chance_saved: 1
-  penalty_save: 8               # 7 + 1 for big chance saved
 game:
   squad: {GK: 2, DEF: 5, MID: 5, FWD: 3}
   xi_min: {GK: 1, DEF: 3, MID: 2, FWD: 1}

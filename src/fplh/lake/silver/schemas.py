@@ -10,6 +10,8 @@ from __future__ import annotations
 import pandas as pd
 import pandera.pandas as pa
 
+from fplh.lake.silver.timeline import EVENT_KINDS
+
 POSITIONS = ["GK", "DEF", "MID", "FWD"]
 
 
@@ -123,6 +125,22 @@ SCHEMAS: dict[str, pa.DataFrameSchema] = {
         },
         checks=[OBSERVED_NOT_BEFORE_EVENT],
         unique=["understat_match_id", "understat_player_id"],
+        strict=False,
+    ),
+    "fact_match_event": pa.DataFrameSchema(
+        {
+            "understat_match_id": pa.Column("int64", coerce=True),
+            "side": pa.Column(str, pa.Check.isin(["h", "a"])),
+            "minute": pa.Column("int64", pa.Check.in_range(0, 130), coerce=True),
+            "kind": pa.Column(str, pa.Check.isin(list(EVENT_KINDS))),
+            "score_home_after": pa.Column("int64", pa.Check.ge(0), coerce=True),
+            "score_away_after": pa.Column("int64", pa.Check.ge(0), coerce=True),
+            "reds_home_after": pa.Column("int64", pa.Check.in_range(0, 5), coerce=True),
+            "reds_away_after": pa.Column("int64", pa.Check.in_range(0, 5), coerce=True),
+            "event_at": _ts(),
+            "observed_at": _ts(),
+        },
+        checks=[OBSERVED_NOT_BEFORE_EVENT],
         strict=False,
     ),
     "dim_fixture": pa.DataFrameSchema(

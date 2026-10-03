@@ -13,7 +13,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
 | 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
 | 2 | Team level (M1–M3, G0–G3) | **Done**: exit gate met as non-inferiority, fused ties the market (§3.2) |
-| 3 | Match and player level (G4–G6, M4–M10, simulator) | Planned |
+| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline and BPS rules built (§4.1) |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
 | 5 | Extensions, each gated by an ablation | Planned |
 | 6 | Operations (VPS, Dagster, Telegram, monitoring) | Planned |
@@ -271,8 +271,23 @@ Exit: fused ≥ market-only on RPS (paired bootstrap), and G0–G3 results logge
 
 ## 4. Phase 3: Match and player level
 
+Delivered as six PRs, each merged when green:
+1. event timeline and BPS rules;
+2. benchmarks (an OpenFPL re-implementation and naive floors);
+3. G4–G6 and the emulator;
+4. M4–M6 and the simulator core;
+5. M7–M10;
+6. player walk-forward, attribution and the exit gate.
+
+Decisions:
+- OpenFPL is re-implemented: XGBoost on its rolling features, trained walk-forward on our data. Its pickles are not loaded.
+- Event timing comes from Understat rosters, because FBref is blocked.
+- The 2025/26 holdout stays untouched. The exception is M7, which uses within-2025/26 walk-forward (open question 1c).
+- No scikit-learn and no LightGBM: xgboost and `scipy.optimize.isotonic_regression` cover M4.
+
 | # | Ticket | Acceptance criteria |
 |---|---|---|
+| 3.0 | Event timeline (`lake/silver/timeline.py`, `fact_match_event`), lineup, goal-timeline and substitution gates, `InformationSet.restrict`, typed BPS tables, bonus eligibility mask | **Built** (§4.1) |
 | 3.1 | `models/goal_process.py` (G4–G6): piecewise-exponential Poisson GLM, hierarchical state effects, red-card hazard, frailty, stoppage-time model | Dispersion direction reported (§11.6); each G-step beats the previous one or is dropped |
 | 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, L-BFGS-B inversion | Market reproduction error within tolerance; cached per model version |
 | 3.3 | `models/minutes.py` (M4): staged LightGBM with monotone constraints, isotonic calibration, small-sample prior blend, horizon drift, news overlay (gap 1) | ECE ≤ 0.02 on start and 60+; A4 logged |
@@ -283,6 +298,32 @@ Exit: fused ≥ market-only on RPS (paired bootstrap), and G0–G3 results logge
 | 3.8 | `evaluate/attribution.py` (§11.5) | Decomposition sums to total error on every row |
 
 Exit: §8.5 validation passes; the simulator beats OpenFPL and the naive floors walk-forward; the `ep_next` comparison runs on live gameweeks (gap 2).
+
+### 4.1 Event timeline and BPS rules on real data
+
+**Timeline.** `fact_match_event` holds 12,464 goals, 451 own goals, 29,694 substitutions, 580 red cards and 2 unreplaced exits for 4,610 matches (2014/15–2026/27).
+- **Substitution minutes** come from Understat roster pairs. Of 25,787 pairs whose substitute plays to the end, 0 disagree by more than 1 minute with "90 − the substitute's minutes".
+- **Red cards:** all 580 are placed, 117 of them at or after 90 minutes (`red_late`).
+- **Goal minutes** come from `fact_shot`. An own-goal row carries the scorer's side; the goal counts for the opponent. With that convention, goal events reproduce every final score.
+- **Assisters:** all 86,894 named assisters match a rostered player.
+- **Gates:** 0 sides with more than 11 on the pitch; 0 with fewer than 11 starters.
+- **Not identifiable:** yellow-card minutes and first-half stoppage time (its shots are recorded at minutes 45–50). Second-half stoppage is visible: shot minutes run to 105.
+
+**Substitution limits** (`configs/rules/football.yaml`, verified by a warning gate with 0 violations):
+
+| Period | Permanent substitutions |
+|---|---|
+| To June 2020 | 3 |
+| Project Restart (June 2020, rest of 2019/20) | 5 |
+| 2020/21–2021/22 | 3 |
+| From 2022/23 | 5 |
+
+Up to 2 concussion substitutes have been allowed since February 2021. They account for every side above its base limit.
+
+**BPS.** Every season YAML now carries a typed base table for the events the simulator generates. `fplh rules check-bps` estimates effective weights by least squares (R² 0.83–0.86):
+- The 60+ minutes award applies from exactly 60 minutes.
+- The penalty-save weight fell from 15 (estimates 14.2–16.0 through 2023/24) to about 8 (8.9 in 2024/25, 7.0 in 2025/26), so 8 is recorded from 2024/25.
+- Goals, clean sheets and penalty misses carry the BPS of correlated actions the table scores separately (shots on target, big chances). M10 therefore reconstructs BPS with the effective weights and keeps the rest in its residual.
 
 ## 5. Phase 4: Decisions
 

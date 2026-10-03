@@ -26,6 +26,7 @@ TIME_INDEXED = (
     "fact_player_match",
     "fact_player_match_understat",
     "fact_shot",
+    "fact_match_event",
     "fd_match",
     "us_match",
     "us_team_match",
@@ -85,6 +86,15 @@ class InformationSet:
     @classmethod
     def at(cls, deadline: pd.Timestamp, store: SilverStore) -> InformationSet:
         return cls(deadline, store)
+
+    def restrict(self, deadline: pd.Timestamp) -> InformationSet:
+        """The information set at an earlier deadline D_g ≤ D (𝓘(D_g) ⊂ 𝓘(D)): what a
+        model trained at D may use as a historical training example."""
+        if deadline.tzinfo is None:
+            raise ValueError("deadline must be timezone-aware")
+        if deadline > self._deadline:
+            raise LeakageError(f"cannot restrict {self._deadline} to a later {deadline}")
+        return InformationSet(deadline, self._store)
 
     @property
     def deadline(self) -> pd.Timestamp:

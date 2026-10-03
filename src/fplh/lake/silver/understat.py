@@ -174,13 +174,19 @@ def normalise_match(
                 "key_passes": _i(r.key_passes),
                 "yellow_cards": _i(r.yellow_card),
                 "red_cards": _i(r.red_card),
+                "roster_id": int(r.id),
                 "roster_in": _i(r.roster_in),
                 "roster_out": _i(r.roster_out),
+                "position_order": _i(r.positionOrder) if r.positionOrder else pd.NA,
+                "xg_chain": _f(r.xGChain),
+                "xg_buildup": _f(r.xGBuildup),
             }
             for side in ("h", "a")
             for r in data.rosters.get(side, {}).values()
         ]
     )
+    if not roster.empty:
+        roster["position_order"] = roster["position_order"].astype("Int64")
     for df in (shots, roster):
         if not df.empty:
             df["event_at"] = event_at

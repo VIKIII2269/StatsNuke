@@ -25,6 +25,7 @@ from fplh.lake.silver import vaastav as va
 from fplh.lake.silver.common import latest_payload, season_label
 from fplh.lake.silver.football_data import prematch_observed_at as fd_prematch
 from fplh.lake.silver.schemas import validate
+from fplh.lake.silver.timeline import derive_lineups, match_events
 from fplh.lake.storage import Lake
 from fplh.sources import load_sources
 
@@ -50,6 +51,15 @@ SORT_KEYS: dict[str, list[str]] = {
     "us_player_season": ["season", "understat_player_id"],
     "fact_shot": ["season", "understat_match_id", "shot_id"],
     "fact_player_match_understat": ["season", "understat_match_id", "understat_player_id"],
+    "fact_match_event": [
+        "season",
+        "understat_match_id",
+        "minute",
+        "kind",
+        "seq",
+        "side",
+        "understat_player_id",
+    ],
     "snap_fpl_player": ["season", "observed_at", "element"],
     "fpl_event": ["season", "observed_at", "gameweek"],
     "dim_fixture": ["fixture_uid"],
@@ -236,12 +246,44 @@ def _resolve(
         notes["entity_link_methods"] = result.links["method"].value_counts().to_dict()
         if not roster.empty:
             code_by = result.links.set_index(["season", "team", "understat_player_id"])["code"]
-            keys = pd.MultiIndex.from_frame(roster[["season", "team", "understat_player_id"]])
-            codes = code_by.reindex(keys).to_numpy()
-            roster["player_uid"] = pd.Series(codes, index=roster.index).map(
-                lambda c: f"fpl:{int(c)}" if pd.notna(c) else pd.NA
-            )
+            for name in ("fact_player_match_understat", "fact_shot"):
+                df = t.get(name, pd.DataFrame())
+                if df.empty:
+                    continue
+                keys = pd.MultiIndex.from_frame(df[["season", "team", "understat_player_id"]])
+                codes = code_by.reindex(keys).to_numpy()
+                df["player_uid"] = pd.Series(codes, index=df.index).map(
+                    lambda c: f"fpl:{int(c)}" if pd.notna(c) else pd.NA
+                )
+    _timeline(t, notes)
     return t
+
+
+def _timeline(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:
+    """Lineup columns on Understat roster rows, shot assisters, and ``fact_match_event``."""
+    roster, shots = t.get("fact_player_match_understat"), t.get("fact_shot")
+    if roster is None or roster.empty or "roster_id" not in roster:
+        return
+    for df in (roster, shots):
+        if df is not None and not df.empty and "player_uid" not in df:
+            df["player_uid"] = pd.NA  # no FPL data to link against
+    lineups, lineup_notes = derive_lineups(roster)
+    notes.update({f"timeline/{k}": v for k, v in lineup_notes.items()})
+    t["fact_player_match_understat"] = lineups
+    if shots is not None and not shots.empty:
+        names = lineups.drop_duplicates(["understat_match_id", "side", "player_name"]).set_index(
+            ["understat_match_id", "side", "player_name"]
+        )
+        keys = pd.MultiIndex.from_frame(shots[["understat_match_id", "side", "assisted_by"]])
+        found = names.reindex(keys)
+        shots["assister_understat_id"] = found["understat_player_id"].astype("Int64").to_numpy()
+        shots["assister_uid"] = found["player_uid"].to_numpy()
+        named = shots["assisted_by"].notna()
+        notes["timeline/assisters_unmatched"] = int(
+            (named & shots["assister_understat_id"].isna()).sum()
+        )
+        notes["timeline/assisters_named"] = int(named.sum())
+        t["fact_match_event"] = match_events(lineups, shots, t["us_match"])
 
 
 def _align_understat_times(t: dict[str, pd.DataFrame], notes: dict[str, Any]) -> None:

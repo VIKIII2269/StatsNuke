@@ -78,3 +78,13 @@ def test_bonus_properties(bps: list[int]) -> None:
     # more BPS never means less bonus
     order = np.argsort(bps)
     assert (np.diff(award.to_numpy()[order]) >= 0).all()
+
+
+@settings(max_examples=200)
+@given(st.lists(st.tuples(st.integers(-5, 80), st.booleans()), min_size=1, max_size=30))
+def test_bonus_mask_matches_pandas(rows: list[tuple[int, bool]]) -> None:
+    bps = pd.Series([b for b, _ in rows])
+    played = pd.Series([p for _, p in rows])
+    expected = assign_bonus(bps, pd.Series([1] * len(rows)), eligible=played)
+    got = assign_bonus_array(bps.to_numpy(), eligible=played.to_numpy())
+    np.testing.assert_array_equal(expected.to_numpy(), got)

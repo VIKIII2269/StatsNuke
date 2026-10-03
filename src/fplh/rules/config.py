@@ -66,6 +66,36 @@ class Bonus(_Strict):
     tie_rule: Literal["official"]
 
 
+class BpsPerN(_Strict):
+    per: int = Field(gt=0)
+    bps: int
+
+
+class Bps(_Strict):
+    """Bonus Points System weights for the events the simulator generates (M10). The
+    official table also scores actions it does not generate (passes, key passes, shots
+    on target, big chances, recoveries, …); those stay in M10's residual."""
+
+    minutes_lt_60: int
+    minutes_gte_60: int
+    goal: dict[Position, int]
+    assist: int
+    clean_sheet: dict[Literal["GK", "DEF"], int]  # 60+ minutes, like FPL clean sheets
+    goal_conceded: dict[Literal["GK", "DEF"], int]  # per goal conceded while on the pitch
+    save: int
+    penalty_save: int
+    penalty_miss: int
+    yellow_card: int
+    red_card: int
+    own_goal: int
+    # Season-specific detail the simulator does not generate (documented for M10).
+    tackled_penalty: int | None = None
+    cbi: BpsPerN | None = None
+    gk_save_inside_box: int | None = None
+    gk_save_other: int | None = None
+    gk_big_chance_saved: int | None = None
+
+
 class Chips(_Strict):
     sets: int = Field(ge=1)
     per_set: list[Chip]
@@ -98,7 +128,7 @@ class Rules(_Strict):
     own_goal: int
     defensive_contribution: DefensiveContribution
     bonus: Bonus
-    bps: dict[str, Any]
+    bps: Bps
     game: Game
 
     @model_validator(mode="before")
