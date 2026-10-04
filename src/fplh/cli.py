@@ -708,6 +708,26 @@ def evaluate_replay_cmd(
     typer.echo(f"exit gate: {'PASS' if report.passed else 'FAIL'}")
 
 
+@evaluate_app.command("ledger")
+def evaluate_ledger_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    min_ev: Annotated[float, typer.Option(help="Paper-bet EV threshold.")] = 0.03,
+) -> None:
+    """Paper-only market ledger: EV, fractional Kelly, CLV (no bets are ever placed)."""
+    from fplh.delivery.ledger import LedgerConfig, run_ledger
+    from fplh.models.market import load_devig_method
+
+    cfg = LedgerConfig(min_ev=min_ev, devig_method=load_devig_method())
+    book, bets, summary = run_ledger(Lake(get_settings().lake_uri), season, cfg)
+    all_clv = book["clv"].dropna()
+    typer.echo(f"priced outcomes: {len(book)}, mean CLV (all) {all_clv.mean():.4f}")
+    if not bets.empty:
+        by = bets.groupby("market")[["clv", "profit", "stake"]].agg(["mean", "sum", "count"])
+        typer.echo(by.round(4).to_string())
+    for k, v in summary.items():
+        typer.echo(f"{k}: {v:.4f}")
+
+
 @evaluate_app.command("attribution")
 def evaluate_attribution_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
