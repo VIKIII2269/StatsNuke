@@ -43,8 +43,9 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 3. 🔜 F8: per-position stack weights; the stack's calibration of P(haul) and ranking (top-10 precision, used by the optimiser).
 4. 🔜 Season replay with v2 forecasts (simulator with news at horizon 5, stacked). Does v2 pass the Phase 4 gate against the replica?
 5. 🔜 B7: live consensus paper tracker on The Odds API snapshots (about 10–15 UK books), logged per gameweek as data arrives.
-6. 🔜 F9: card memory 730 d and one season of BPS weights (small known gains from the Phase 3 tuning).
-7. 🔜 Docs, PR, merge on green CI.
+6. ⏳ D1: optimiser tuning on the 2021/22 replay (bench weight β, discount δ, horizon 3/5/8, chip thresholds ×0.5/×1.5), applied unchanged to the test seasons.
+7. 🔜 F9: card memory 730 d and one season of BPS weights (small known gains from the Phase 3 tuning).
+8. 🔜 Docs, PR, merge on green CI.
 
 ## Data sources
 
