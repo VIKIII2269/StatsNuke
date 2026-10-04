@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 from fplh.evaluate.player_level import align, outcomes, player_losses, summary, top_k_precision
-from fplh.evaluate.walk_forward import output_digest, run_walk_forward
+from fplh.evaluate.walk_forward import cached_walk_forward, output_digest, run_walk_forward
 from fplh.features.information_set import InformationSet, SilverStore
 from fplh.features.leakage import check_leakage
 from fplh.features.openfpl import openfpl_features
 from fplh.features.spine import SPINE_KEYS
+from fplh.lake.parquet import write_parquet
+from fplh.lake.storage import Lake
 from fplh.models.baselines import NaiveLast5
 from fplh.models.openfpl import OpenFPLReplica, training_rows
 from tests.synthetic_silver import SEASON, deadlines, make, with_understat
@@ -108,3 +112,25 @@ def test_top_k_precision_counts_ties() -> None:
     )
     # top-2 predicted = first two rows; actual top 2 = {10, 7, 7} → 1 of 2 hit
     assert top_k_precision(g, k=2) == 0.5
+
+
+def test_cached_walk_forward_reuses_a_matching_run(tmp_path: Path) -> None:
+    f = frames()
+    lake = Lake(str(tmp_path / "lake"))
+    for name, df in f.items():
+        write_parquet(lake, f"silver/{name}/part-000.parquet", df, [])
+    store = SilverStore(lake)
+    ds = deadlines(f)
+    assert cached_walk_forward(SilverStore.from_frames(f), NaiveLast5(), ds, lake=lake).written
+    first = cached_walk_forward(store, NaiveLast5(), ds, lake=lake)
+    assert first.written  # computed and stored
+    again = cached_walk_forward(store, NaiveLast5(), ds, lake=lake)
+    assert not again.written and again.run_id == first.run_id
+    keys = ["player_uid", "fixture_uid", "deadline_at"]
+    pd.testing.assert_frame_equal(
+        again.predictions.sort_values(keys).reset_index(drop=True),
+        first.predictions.sort_values(keys).reset_index(drop=True),
+        check_dtype=False,
+    )
+    other = cached_walk_forward(store, NaiveLast5(window=3), ds[:3], lake=lake)
+    assert other.written  # different deadlines: not reused

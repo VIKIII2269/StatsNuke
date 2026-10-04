@@ -570,6 +570,39 @@ def models_fit_devig(
     typer.echo(f"wrote {path}: devig = {method}")
 
 
+@evaluate_app.command("g-ladder")
+def evaluate_g_ladder(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+) -> None:
+    """Fit G4–G6, build their emulators, run the ladder and the §8.5 team checks; writes
+    configs/models/goal_process.yaml (every level and the one the simulator uses)."""
+    import pandas as pd
+    import yaml
+
+    from fplh.evaluate.goal_process import evaluate_goal_process
+
+    result = evaluate_goal_process(Lake(get_settings().lake_uri), season)
+    with pd.option_context("display.width", 200, "display.max_columns", 20):
+        typer.echo(result.dispersion.to_string(index=False))
+        typer.echo(result.summary.to_string(index=False))
+        typer.echo(result.comparisons.to_string(index=False))
+    for k, v in result.checks.items():
+        typer.echo(f"{k}: {v}")
+    body = {
+        "version": 1,
+        "simulator_level": result.chosen,
+        "levels": {k: v.to_dict() for k, v in result.params.items()},
+    }
+    path = get_settings().configs_dir / "models" / "goal_process.yaml"
+    before = next(iter(result.params.values())).trained_before
+    doc = (
+        "# In-match goal process G4–G6 (models/goal_process.py), fitted by\n"
+        f"# `fplh evaluate g-ladder` on matches before {before}.\n"
+    )
+    path.write_text(doc + yaml.safe_dump(body, sort_keys=False))
+    typer.echo(f"wrote {path}: simulator level {result.chosen}")
+
+
 @evaluate_app.command("phase3-benchmarks")
 def evaluate_phase3_benchmarks(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
