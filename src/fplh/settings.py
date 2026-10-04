@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     http_timeout_s: float = 30.0
     odds_api_key: SecretStr | None = None  # FPLH_ODDS_API_KEY; never logged or stored
     odds_monthly_credits: int = 500
+
+    @field_validator("odds_api_key", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, v: object) -> object:
+        """CI passes unset secrets as empty strings: treat them as not set."""
+        return None if isinstance(v, str) and not v.strip() else v
 
 
 def get_settings() -> Settings:

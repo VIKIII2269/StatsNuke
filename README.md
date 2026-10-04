@@ -39,6 +39,21 @@ official points; see [the plan, §2.2](docs/IMPLEMENTATION_PLAN.md#22-results-on
 
 xG improves M1 significantly. M1 alone reaches RPS 0.197 against the market's 0.194 at the deadline. The fused forecast ties the market on RPS (the exit gate, met as non-inferiority) and is best on scoreline log loss; see [the plan, §3.2](docs/IMPLEMENTATION_PLAN.md#32-results-on-real-data).
 
+**Phase 3 (match and player level)** is built and passes its exit gate walk-forward on 2022/23–2024/25. It comprises:
+
+- an **event timeline** from Understat rosters;
+- the **G4–G6 in-match goal process** with an emulator;
+- **component models:**
+  - minutes (M4: calibrated XGBoost);
+  - attack (M5/M6: shrunk Gamma–Poisson);
+  - defensive actions (M7);
+  - saves (M8);
+  - cards (M9);
+  - bonus (M10);
+- a **vectorised player simulator** scoring with the official rules.
+
+The simulator's MSE is 3.633, against 3.661 for an OpenFPL re-implementation, 4.015 for A0 and 4.354 for the last-5 average. Every gameweek-block CI excludes 0. P(60+) and P(haul) are calibrated to within 0.01. Minutes is the largest single contribution. See [the plan, §4.6](docs/IMPLEMENTATION_PLAN.md#46-the-exit-gate-the-player-simulator-walk-forward).
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 if needed).
@@ -62,6 +77,14 @@ uv run fplh evaluate a0 --season 2024-25
 uv run fplh models fit-devig --before 2022-07-01     # writes configs/models/market.yaml
 uv run fplh models fit-m1 --before 2022-07-01         # writes configs/models/team_strength.yaml (~70 min)
 uv run fplh evaluate phase2 --season 2022-23 --season 2023-24 --season 2024-25
+
+# Phase 3: match and player level
+uv run fplh evaluate phase3-benchmarks --season 2022-23 --season 2023-24 --season 2024-25
+uv run fplh evaluate g-ladder --season 2022-23 --season 2023-24 --season 2024-25   # writes goal_process.yaml
+uv run fplh evaluate components --season 2022-23 --season 2023-24 --season 2024-25
+uv run fplh evaluate phase3 --season 2022-23 --season 2023-24 --season 2024-25     # the exit gate (~80 min)
+uv run fplh evaluate attribution --season 2022-23 --season 2023-24 --season 2024-25 --every 2
+uv run fplh evaluate ep-next --season 2026-27                                     # live gameweeks with captures
 
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures

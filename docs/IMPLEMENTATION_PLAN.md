@@ -13,7 +13,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
 | 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
 | 2 | Team level (M1–M3, G0–G3) | **Done**: exit gate met as non-inferiority, fused ties the market (§3.2) |
-| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline, BPS rules, benchmarks, goal process and emulator built (§4.1–4.3) |
+| 3 | Match and player level (G4–G6, M4–M10, simulator) | **Done**: the simulator beats the OpenFPL re-implementation and both floors walk-forward (§4.6) |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
 | 5 | Extensions, each gated by an ablation | Planned |
 | 6 | Operations (VPS, Dagster, Telegram, monitoring) | Planned |
@@ -84,10 +84,11 @@ These were found while planning. Each one changes how a later phase is built.
    - *Resolution:* M4 = **base model** trained on history *without* snapshot features, plus a **news overlay**: a logit offset trained only on captured seasons, shrunk to 0 while data is thin.
    - The walk-forward harness marks snapshot features *missing* before capture began and never imputes them.
    - Ablation A4 compares base-only against base plus overlay on live 2026/27.
-2. **The `ep_next` benchmark (G2) can be measured only live**, from our first captured deadline. The 2022/23–2025/26 tuning and holdout periods benchmark against OpenFPL and the naive floors instead. This changes the §13 Phase 3 exit criterion to "beats OpenFPL and naive floors walk-forward; beats `ep_next` on live gameweeks as they accrue".
+   - *Phase 3:* the base model is built (§4.4). `chance_of_playing` is a feature that stays missing before captures, and the captures run from 30 September 2026 (§4.6). The overlay is fitted once a captured season accrues.
+2. **The `ep_next` benchmark (G2) can be measured only live**, from our first captured deadline. The 2022/23–2025/26 tuning and holdout periods benchmark against OpenFPL and the naive floors instead. This changes the §13 Phase 3 exit criterion to "beats OpenFPL and naive floors walk-forward; beats `ep_next` on live gameweeks as they accrue". *Phase 3:* the first part is met (§4.6); `fplh evaluate ep-next` runs the second as captured gameweeks get results.
 3. **Pinnacle closing odds after the July 2025 API closure.** First Phase 1 task for football-data: check whether `PSCH/PSCD/PSCA` are still populated for 2025/26 and 2026/27. If they aren't, the match benchmark becomes de-vigged **market-average closing** (`AvgCH/AvgCD/AvgCA`), and G1 is restated against it.
-4. **The shot-rate ↔ goal-rate link is under-specified (§7.3 vs §7.5).** The emulator takes fused **goal** rates as its inputs and maps them to base shot rates, `λ̄^S_k = λ̄_k / (team mean xG per shot × league finishing)`. The inversion and the intensity model then share one parameterisation. Frailty variance and state effects are fixed at their fitted values inside the emulator (open question 6).
-5. **Emulator cost.** A grid of 60² points × 10⁵ sims × ~96 steps needs a **team-only simulator path** with no player allocation, lineups or bookings. Scoreline markets depend only on team intensities, red cards and frailty. Budget: 1–2 h on Colab CPU, cached by `goal_process` model version.
+4. **The shot-rate ↔ goal-rate link is under-specified (§7.3 vs §7.5).** The emulator takes fused **goal** rates as its inputs and maps them to base shot rates, `λ̄^S_k = λ̄_k / (team mean xG per shot × league finishing)`. The inversion and the intensity model then share one parameterisation. Frailty variance and state effects are fixed at their fitted values inside the emulator (open question 6). *Phase 3:* the emulator inverts fused mean goals to G6 nominal rates by 2-D Newton (§4.3), so inversion and simulation share one parameterisation.
+5. **Emulator cost.** A grid of 60² points × 10⁵ sims × ~96 steps needs a **team-only simulator path** with no player allocation, lineups or bookings. Scoreline markets depend only on team intensities, red cards and frailty. Budget: 1–2 h on Colab CPU, cached by `goal_process` model version. *Phase 3:* a 20² grid × 10⁵ team-only simulations (§4.3) takes minutes and is cached in gold by parameter hash.
 6. **Publication lags for backfilled history** are now configured in `configs/sources.yaml`:
    - FPL and vaastav history: 33 h (lockdown);
    - Understat: 24 h;
@@ -99,7 +100,7 @@ These were found while planning. Each one changes how a later phase is built.
    - (2) one snapshot at deadline − 2 h per gameweek;
    - (3) opportunistic snapshots from what is left. That totals ≈ 150–250 credits per month.
 8. **Free-transfer behaviour in chip weeks** belongs in the rules config (`game.free_transfers_preserved_on`, already added), not hard-coded in the MILP.
-9. **Walk-forward compute.** A full NUTS refit every 4 gameweeks × 38 × 3 tuning seasons is about 30 refits per configuration. Run the ablation ladders with SVI/Laplace, and run NUTS only on finalists and for the holdout.
+9. **Walk-forward compute.** A full NUTS refit every 4 gameweeks × 38 × 3 tuning seasons is about 30 refits per configuration. Run the ablation ladders with SVI/Laplace, and run NUTS only on finalists and for the holdout. *Phase 3:* no player-level model needs NUTS. Walk-forward runs are cached by predictor version, data and configuration, so the full exit gate with two ablations runs once in about 80 minutes on 4 cores, and reruns are free.
 10. **vaastav is now three updates per season.** 2026/27 golden and training data must come from our own post-GW pulls. That makes the Phase 0 collector a hard dependency for Phase 1 as well.
 
 ---
@@ -289,16 +290,16 @@ Decisions:
 |---|---|---|
 | 3.0 | Event timeline (`lake/silver/timeline.py`, `fact_match_event`), lineup, goal-timeline and substitution gates, `InformationSet.restrict`, typed BPS tables, bonus eligibility mask | **Built** (§4.1) |
 | 3.0b | Benchmarks: OpenFPL re-implementation (`features/openfpl.py`, `models/openfpl.py`), last-5 floor, player scoring (`evaluate/player_level.py`), `fplh evaluate phase3-benchmarks` | **Built** (§4.2) |
-| 3.1 | `models/goal_process.py` (G4–G6): piecewise-exponential Poisson GLM, hierarchical state effects, red-card hazard, frailty, stoppage-time model | Dispersion direction reported (§11.6); each G-step beats the previous one or is dropped |
-| 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, L-BFGS-B inversion | Market reproduction error within tolerance; cached per model version |
+| 3.1 | `models/goal_process.py` (G4–G6): piecewise-exponential Poisson GLM, hierarchical state effects, red-card hazard, frailty, stoppage-time model | **Built** (§4.3): dispersion reported; G6 drives the simulator, G0 stays the pre-match default |
+| 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, 2-D Newton inversion | **Built** (§4.3): max error 0.005; cached by parameter hash |
 | 3.3 | `models/minutes.py` (M4): staged XGBoost with monotone constraints, isotonic calibration, substitution-era shift, news overlay (gap 1) | **Built** (§4.4): ECE 0.002 / 0.004; A4 beats naive |
 | 3.4 | `models/attack.py` (M5/M6): conjugate Gamma-Poisson with decay, shrunk shot quality and finishing, penalties and own goals | **Built** (§4.4): A5 logged |
 | 3.5 | `models/defence.py` (M7): NegBin with definition-drift rescaling and an opponent factor | **Built** (§4.5): threshold Brier beats the position mean within 2018/19 and 2025/26 |
 | 3.6 | `models/gk.py`, `models/cards.py`, `models/bonus.py` (M8–M10; effective BPS weights, official table as reference) | **Built** (§4.5): each beats its baseline |
-| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | **Built** (§4.4–4.5): property tests pass; the full §8.5 suite runs in PR 6 |
-| 3.8 | `evaluate/attribution.py` (§11.5) | Decomposition sums to total error on every row |
+| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | **Built** (§4.4–4.6): property tests pass; walk-forward predictor `models/player_sim.py` |
+| 3.8 | `evaluate/attribution.py` (§11.5) | **Built** (§4.6): parts sum to the error on every row (checked in code and tests) |
 
-Exit: §8.5 validation passes; the simulator beats OpenFPL and the naive floors walk-forward; the `ep_next` comparison runs on live gameweeks (gap 2).
+Exit: §8.5 validation passes; the simulator beats OpenFPL and the naive floors walk-forward; the `ep_next` comparison runs on live gameweeks (gap 2). **Met** (§4.6); `ep_next` runs as captures and results accrue.
 
 ### 4.1 Event timeline and BPS rules on real data
 
@@ -563,6 +564,89 @@ Threshold Brier at the 2025/26 thresholds, against the position's mean rate with
 - simulated saves and yellow rates match their means.
 
 10 fixtures × 5,000 simulations with every component take 3.8 s.
+
+### 4.6 The exit gate: the player simulator walk-forward
+
+`fplh evaluate phase3 --season 2022-23 --season 2023-24 --season 2024-25` runs every model walk-forward at horizon 1. All are scored on the same 80,973 player-fixtures (33,208 with minutes) over 110 gameweek blocks. Runs are cached by predictor version, data and configuration. The first run takes about 80 minutes on 4 cores, including both ablations.
+
+**The predictor** (`models/player_sim.py`), at each deadline:
+- **Fits on 𝓘(D) only:** M4 (refit every 4 deadlines), M5/M6, M7–M10 and M8's pre-match rates (the M1 filter at D).
+- **Team rates:** takes the Phase 2 fused rates (`FusedRates`, the fusion fitted on the five seasons before the first deadline) and inverts them to G6 nominal rates with the emulator.
+- **Simulates** every fixture 2,000 times, giving per player:
+  - expected points and the points pmf (−4…25);
+  - P(60+), P(play), P(haul ≥ 10);
+  - goals, assists, saves, bonus and clean-sheet probability.
+
+| Model | MSE | MAE | Spearman within position | Spearman, played | Top-10 precision |
+|---|---|---|---|---|---|
+| **Simulator** | **3.633** | **0.970** | 0.700 | **0.379** | **0.441** |
+| A5: raw goal rates | 3.648 | 0.972 | 0.699 | 0.374 | 0.440 |
+| OpenFPL replica | 3.661 | 0.996 | 0.696 | 0.371 | 0.429 |
+| A4: naive minutes | 3.833 | 0.987 | 0.700 | 0.350 | 0.435 |
+| A0 | 4.015 | 1.001 | **0.714** | 0.331 | 0.410 |
+| Last 5 | 4.354 | 1.050 | 0.681 | 0.283 | 0.384 |
+
+**Gate.** Each benchmark needs an MSE difference with CI upper bound < 0, and a negative point estimate in at least 2 of 3 seasons. 95 % gameweek-block CI and DM p-values:
+
+| Simulator − | Difference | 95 % CI | DM p | 2022/23 | 2023/24 | 2024/25 |
+|---|---|---|---|---|---|---|
+| OpenFPL replica | **−0.029** | [−0.048, −0.011] | 0.003 | −0.060 | −0.024 | +0.0005 |
+| A0 | −0.403 | [−0.489, −0.331] | < 1e-4 | −0.409 | −0.392 | −0.345 |
+| Last 5 | −0.736 | [−0.808, −0.667] | < 1e-4 | −0.779 | −0.709 | −0.677 |
+
+**The gate passes.**
+- **Against the replica the margin is narrow (0.8 % of MSE)** and 2024/25 is a tie. The simulator's clearer advantages are MAE, ranking among players who played, and top-10 precision, which are what transfers and captaincy use.
+- **One guardrail is not ours:** A0 still ranks all rows best (Spearman 0.714). Its separation of benched from starting players matters most on the many rows with 0 points.
+
+**Guardrails** (calibration of the simulator's distribution):
+
+| Quantity | Mean predicted | Observed | ECE |
+|---|---|---|---|
+| P(60+ minutes) | 0.2825 | 0.2819 | 0.006 |
+| P(haul ≥ 10) | 0.0167 | 0.0164 | 0.001 |
+| Points | 1.1298 | 1.1307 | — |
+
+CRPS of the points pmf is 0.627.
+
+**Ablations** (simulator − variant, MSE):
+- **A4 naive minutes** (shares of the last three matches): −0.200 [−0.216, −0.182]. Minutes is by far the largest single contribution, about 7 times the margin over the replica.
+- **A5 raw goal rates** (no shrinkage): −0.016 [−0.023, −0.008].
+- **A7 and A8 are not run.** A7 needs a substitution hazard, and the simulator draws exits from the empirical timing instead. A8 needs epistemic posterior draws, which are not built. Both move to Phase 5.
+
+**Attribution** (`fplh evaluate attribution`, every second deadline, 1,000 simulations): the error y − ŷ⁰ splits exactly into three parts:
+- **minutes** (ŷ¹ − ŷ⁰): the actual minutes imposed;
+- **goal events** (ŷ² − ŷ¹): actual goals, assists, own goals, conceded and missed penalties also imposed;
+- **the rest** (y − ŷ²): saves, cards, defensive actions, bonus and sampling.
+
+The table gives the MSE of each forecast on 39,330 player-fixtures:
+
+| Position | n | Forecast ŷ⁰ | Actual minutes ŷ¹ | Plus actual goal events ŷ² | Mean abs. minutes part | Mean abs. goal-events part | Mean abs. rest |
+|---|---|---|---|---|---|---|---|
+| All | 39,330 | 3.561 | 2.749 | 0.156 | 0.548 | 0.705 | 0.143 |
+| GK | 4,282 | 2.334 | 1.856 | 0.449 | 0.225 | 0.492 | 0.224 |
+| DEF | 13,174 | 3.398 | 2.618 | 0.130 | 0.576 | 0.758 | 0.141 |
+| MID | 17,181 | 3.700 | 2.843 | 0.109 | 0.596 | 0.692 | 0.127 |
+| FWD | 4,693 | 4.628 | 3.586 | 0.132 | 0.587 | 0.798 | 0.127 |
+
+How the error divides:
+- **Minutes, about 23 %.** Knowing who plays and for how long removes 0.81 of the 3.56. This part is partly reducible with team news (gap 1, the captured chance of playing).
+- **Goal events, about 73 %.** Knowing the goals, assists and goals conceded removes most of the rest. This is mostly the irreducible luck of scoring, which better attack inputs (player-prop odds) can narrow only at the margin.
+- **The rest, about 4 %.** Saves, cards, bonus and defensive actions. It is largest for goalkeepers (0.45: saves and bonus).
+
+**`ep_next`** (`fplh evaluate ep-next --season 2026-27`):
+- The bootstrap captures run every 3 hours from 30 September 2026 on the `Collect` workflow (`data-bronze` branch until a bucket is configured).
+- The comparison takes the last capture at or before each deadline, no older than 4 days, and sums the simulator's expected points over a player's fixtures in the gameweek.
+- It is tested on synthetic captures and runs as live gameweeks with results accrue (gap 2).
+
+**Tuning experiments on 2021/22** (not a gate season, so the gate stays clean):
+- The attack half-life and finishing shrinkage are already at their best.
+- Penalty takers are the weakest role input. The predicted taker on the pitch takes 66–69 % of penalties; in 15–19 % of penalties the taker had no recorded attempt. This needs news, not modelling.
+- Longer card memory (730 days) and one season of BPS weights each improve their Brier score in the fourth decimal. They are left for the next model version.
+
+**Where the gains will come from.** Tuning is close to exhausted on these inputs. The next gains need new information:
+- the captured news and chance of playing (the news overlay of gap 1);
+- player-prop odds (anytime scorer, which also reveals penalty duty);
+- stacking the simulator with the replica.
 
 ## 5. Phase 4: Decisions
 

@@ -89,6 +89,19 @@ class FixtureInputs:
     sides: tuple[SideInputs, SideInputs]
     sub_limit: int = 5
     mean_goals: tuple[float, float] | None = None  # μ (home, away) for saves; else simulated
+    forced: tuple[ForcedSide, ForcedSide] | None = None  # attribution: actual outcomes
+
+
+@dataclass
+class ForcedSide:
+    """Actual outcomes imposed on a side for error attribution (ARCHITECTURE.md §11.5):
+    minutes always (no simulated lineups or red cards), goal events optionally."""
+
+    on: IntArray  # (P,) entry minute: 0 for starters, NEVER for players who did not play
+    off: IntArray  # (P,) exit minute, ≥ 90 for the final whistle
+    red_cards: IntArray  # (P,)
+    goals: dict[str, IntArray] | None = None  # goals_scored, assists, own_goals,
+    # goals_conceded, penalties_missed
 
 
 @dataclass
@@ -250,7 +263,18 @@ def simulate_fixture(
     goal_slots = team.goal_slots[0].astype(np.int64)  # (S, T, 2)
     red_slots = team.red_slots[0].astype(np.int64)
     s_idx = np.arange(n_sims)
-    lineups = [_lineups(side, n_sims, fx.sub_limit, timing, rng) for side in fx.sides]
+    if fx.forced is not None:  # actual minutes: no simulated lineups or red cards
+        red_slots = np.zeros_like(red_slots)
+        lineups = [
+            (
+                np.tile(f.on == 0, (n_sims, 1)),
+                np.tile(f.on.astype(np.int64), (n_sims, 1)),
+                np.tile(f.off.astype(np.int64), (n_sims, 1)),
+            )
+            for f in fx.forced
+        ]
+    else:
+        lineups = [_lineups(side, n_sims, fx.sub_limit, timing, rng) for side in fx.sides]
     ons = [lu[1] for lu in lineups]
     offs = [lu[2] for lu in lineups]
     counts = {
@@ -351,6 +375,16 @@ def simulate_fixture(
         saved = ok & (gk_idx >= 0) & (rng.random(len(rows)) < share)
         np.add.at(counts["penalties_saved"][1 - k], (rows[saved], gk_idx[saved]), 1)
 
+    forced_conceded: list[IntArray | None] = [None, None]
+    if fx.forced is not None:
+        for k, f in enumerate(fx.forced):
+            counts["red_cards"][k] = np.tile(f.red_cards.astype(np.int64), (n_sims, 1))
+            if f.goals is not None:
+                for name in ("goals_scored", "assists", "own_goals", "penalties_missed"):
+                    counts[name][k] = np.tile(f.goals[name].astype(np.int64), (n_sims, 1))
+                forced_conceded[k] = np.tile(
+                    f.goals["goals_conceded"].astype(np.int64), (n_sims, 1)
+                )
     cum = np.cumsum(goal_slots, axis=1)  # (S, T, 2) goals up to and including slot t
     t_max = goal_slots.shape[1]
     dc_active = bool(
@@ -370,6 +404,9 @@ def simulate_fixture(
             - np.take_along_axis(opp_cum, np.clip(start_t, 0, None), axis=1) * (start_t >= 0),
             0,
         )
+        fc = forced_conceded[k]
+        if fc is not None:
+            conceded = np.where(played > 0, fc, 0)
         m = played / 90
         zeros = np.zeros_like(played)
         yellow = zeros
