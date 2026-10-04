@@ -1,0 +1,432 @@
+{
+ "get": "fixtures/lineups",
+ "parameters": {
+  "fixture": "1035372"
+ },
+ "errors": [],
+ "results": 2,
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "response": [
+  {
+   "team": {
+    "id": 48,
+    "name": "West Ham",
+    "logo": "https://media.api-sports.io/football/teams/48.png",
+    "colors": {
+     "player": {
+      "primary": "74112e",
+      "number": "ffffff",
+      "border": "74112e"
+     },
+     "goalkeeper": {
+      "primary": "00d40f",
+      "number": "000000",
+      "border": "00d40f"
+     }
+    }
+   },
+   "coach": {
+    "id": 5662,
+    "name": "D. Moyes",
+    "photo": "https://media.api-sports.io/football/coachs/5662.png"
+   },
+   "formation": "4-2-3-1",
+   "startXI": [
+    {
+     "player": {
+      "id": 253,
+      "name": "A. Areola",
+      "number": 23,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 18823,
+      "name": "B. Johnson",
+      "number": 2,
+      "pos": "D",
+      "grid": "2:4"
+     }
+    },
+    {
+     "player": {
+      "id": 1445,
+      "name": "K. Mavropanos",
+      "number": 15,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 18817,
+      "name": "A. Ogbonna",
+      "number": 21,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 2284,
+      "name": "Emerson",
+      "number": 33,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 2869,
+      "name": "E. Álvarez",
+      "number": 19,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 1243,
+      "name": "T. Souček",
+      "number": 28,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 1697,
+      "name": "Pablo Fornals",
+      "number": 8,
+      "pos": "M",
+      "grid": "4:3"
+     }
+    },
+    {
+     "player": {
+      "id": 2938,
+      "name": "J. Ward-Prowse",
+      "number": 7,
+      "pos": "M",
+      "grid": "4:2"
+     }
+    },
+    {
+     "player": {
+      "id": 19361,
+      "name": "S. Benrahma",
+      "number": 22,
+      "pos": "M",
+      "grid": "4:1"
+     }
+    },
+    {
+     "player": {
+      "id": 19428,
+      "name": "J. Bowen",
+      "number": 20,
+      "pos": "F",
+      "grid": "5:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 284409,
+      "name": "D. Mubama",
+      "number": 45,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18955,
+      "name": "D. Ings",
+      "number": 18,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 2997,
+      "name": "Ł. Fabiański",
+      "number": 1,
+      "pos": "G",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18820,
+      "name": "C. Coventry",
+      "number": 32,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18813,
+      "name": "A. Cresswell",
+      "number": 3,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 665,
+      "name": "M. Cornet",
+      "number": 17,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 288118,
+      "name": "L. Orford",
+      "number": 61,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 288116,
+      "name": "K. Casey",
+      "number": 42,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 284060,
+      "name": "L. Laing",
+      "number": 53,
+      "pos": "D",
+      "grid": null
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": 51,
+    "name": "Brighton",
+    "logo": "https://media.api-sports.io/football/teams/51.png",
+    "colors": {
+     "player": {
+      "primary": "ffffff",
+      "number": "0935e1",
+      "border": "ffffff"
+     },
+     "goalkeeper": {
+      "primary": "ffff00",
+      "number": "000000",
+      "border": "ffff00"
+     }
+    }
+   },
+   "coach": {
+    "id": 2424,
+    "name": "R. De Zerbi",
+    "photo": "https://media.api-sports.io/football/coachs/2424.png"
+   },
+   "formation": "4-3-1-2",
+   "startXI": [
+    {
+     "player": {
+      "id": 18960,
+      "name": "J. Steele",
+      "number": 23,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 305730,
+      "name": "J. Hinshelwood",
+      "number": 41,
+      "pos": "D",
+      "grid": "2:4"
+     }
+    },
+    {
+     "player": {
+      "id": 19265,
+      "name": "A. Webster",
+      "number": 4,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 38695,
+      "name": "J. van Hecke",
+      "number": 29,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 46731,
+      "name": "P. Estupiñán",
+      "number": 30,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 18970,
+      "name": "P. Groß",
+      "number": 13,
+      "pos": "M",
+      "grid": "3:3"
+     }
+    },
+    {
+     "player": {
+      "id": 130423,
+      "name": "B. Gilmour",
+      "number": 11,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 296,
+      "name": "J. Milner",
+      "number": 6,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 311334,
+      "name": "F. Buonanotte",
+      "number": 40,
+      "pos": "M",
+      "grid": "4:1"
+     }
+    },
+    {
+     "player": {
+      "id": 1469,
+      "name": "D. Welbeck",
+      "number": 18,
+      "pos": "F",
+      "grid": "5:2"
+     }
+    },
+    {
+     "player": {
+      "id": 10329,
+      "name": "João Pedro",
+      "number": 9,
+      "pos": "F",
+      "grid": "5:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 129643,
+      "name": "E. Ferguson",
+      "number": 28,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 295,
+      "name": "A. Lallana",
+      "number": 14,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 40911,
+      "name": "J. Moder",
+      "number": 15,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 356041,
+      "name": "C. Baleba",
+      "number": 20,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 14,
+      "name": "M. Dahoud",
+      "number": 8,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 336599,
+      "name": "B. Baker-Boaitey",
+      "number": 47,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 273758,
+      "name": "I. Samuels",
+      "number": 43,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 200233,
+      "name": "L. Kavanagh",
+      "number": 52,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 129058,
+      "name": "B. Verbruggen",
+      "number": 1,
+      "pos": "G",
+      "grid": null
+     }
+    }
+   ]
+  }
+ ]
+}

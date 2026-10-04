@@ -1,0 +1,432 @@
+{
+ "get": "fixtures/lineups",
+ "parameters": {
+  "fixture": "1035042"
+ },
+ "errors": [],
+ "results": 2,
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "response": [
+  {
+   "team": {
+    "id": 62,
+    "name": "Sheffield Utd",
+    "logo": "https://media.api-sports.io/football/teams/62.png",
+    "colors": {
+     "player": {
+      "primary": "dc2c36",
+      "number": "050505",
+      "border": "dc2c36"
+     },
+     "goalkeeper": {
+      "primary": "232325",
+      "number": "fcfcfc",
+      "border": "232325"
+     }
+    }
+   },
+   "coach": {
+    "id": 2397,
+    "name": "P. Heckingbottom",
+    "photo": "https://media.api-sports.io/football/coachs/2397.png"
+   },
+   "formation": "3-5-2",
+   "startXI": [
+    {
+     "player": {
+      "id": 1736,
+      "name": "W. Foderingham",
+      "number": 18,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 1949,
+      "name": "A. Ahmedhodžić",
+      "number": 15,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 19093,
+      "name": "J. Egan",
+      "number": 12,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 19294,
+      "name": "J. Robinson",
+      "number": 19,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 19090,
+      "name": "G. Baldock",
+      "number": 2,
+      "pos": "M",
+      "grid": "3:5"
+     }
+    },
+    {
+     "player": {
+      "id": 19091,
+      "name": "C. Basham",
+      "number": 6,
+      "pos": "M",
+      "grid": "3:4"
+     }
+    },
+    {
+     "player": {
+      "id": 19105,
+      "name": "O. Norwood",
+      "number": 16,
+      "pos": "M",
+      "grid": "3:3"
+     }
+    },
+    {
+     "player": {
+      "id": 19302,
+      "name": "B. Osborn",
+      "number": 23,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 44809,
+      "name": "M. Lowe",
+      "number": 3,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 304161,
+      "name": "B. Traoré",
+      "number": 11,
+      "pos": "F",
+      "grid": "4:2"
+     }
+    },
+    {
+     "player": {
+      "id": 315237,
+      "name": "W. Osula",
+      "number": 32,
+      "pos": "F",
+      "grid": "4:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 10169,
+      "name": "Vinicius Souza",
+      "number": 21,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 199310,
+      "name": "A. Ben Slimane",
+      "number": 25,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 138828,
+      "name": "Y. Larouci",
+      "number": 27,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 277716,
+      "name": "A. Hackford",
+      "number": 39,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 379150,
+      "name": "A. Brooks",
+      "number": 35,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 400340,
+      "name": "L. Marsh",
+      "number": 34,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 17407,
+      "name": "F. Seriki",
+      "number": 38,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 50737,
+      "name": "A. Trusty",
+      "number": 5,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 19779,
+      "name": "A. Davies",
+      "number": 1,
+      "pos": "G",
+      "grid": null
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": 52,
+    "name": "Crystal Palace",
+    "logo": "https://media.api-sports.io/football/teams/52.png",
+    "colors": {
+     "player": {
+      "primary": "1017da",
+      "number": "ffffff",
+      "border": "1017da"
+     },
+     "goalkeeper": {
+      "primary": "006600",
+      "number": "ffffff",
+      "border": "006600"
+     }
+    }
+   },
+   "coach": {
+    "id": 9,
+    "name": "R. Hodgson",
+    "photo": "https://media.api-sports.io/football/coachs/9.png"
+   },
+   "formation": "4-2-3-1",
+   "startXI": [
+    {
+     "player": {
+      "id": 19143,
+      "name": "S. Johnstone",
+      "number": 1,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 18847,
+      "name": "J. Ward",
+      "number": 2,
+      "pos": "D",
+      "grid": "2:4"
+     }
+    },
+    {
+     "player": {
+      "id": 2729,
+      "name": "J. Andersen",
+      "number": 16,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 67971,
+      "name": "M. Guéhi",
+      "number": 6,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 182201,
+      "name": "T. Mitchell",
+      "number": 3,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 2490,
+      "name": "J. Lerma",
+      "number": 8,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 3339,
+      "name": "C. Doucouré",
+      "number": 28,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 3428,
+      "name": "J. Ayew",
+      "number": 9,
+      "pos": "M",
+      "grid": "4:3"
+     }
+    },
+    {
+     "player": {
+      "id": 19586,
+      "name": "E. Eze",
+      "number": 10,
+      "pos": "M",
+      "grid": "4:2"
+     }
+    },
+    {
+     "player": {
+      "id": 18843,
+      "name": "J. Schlupp",
+      "number": 15,
+      "pos": "M",
+      "grid": "4:1"
+     }
+    },
+    {
+     "player": {
+      "id": 1135,
+      "name": "O. Édouard",
+      "number": 22,
+      "pos": "F",
+      "grid": "5:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 18844,
+      "name": "J. Tomkins",
+      "number": 5,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18862,
+      "name": "N. Clyne",
+      "number": 17,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18853,
+      "name": "J. Riedewald",
+      "number": 44,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 19684,
+      "name": "R. Matthews",
+      "number": 31,
+      "pos": "G",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 266203,
+      "name": "J. Gordon",
+      "number": 37,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 126949,
+      "name": "C. Richards",
+      "number": 26,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 284449,
+      "name": "J. Rak-Sakyi",
+      "number": 49,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 152418,
+      "name": "N. Ahamada",
+      "number": 29,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 25927,
+      "name": "J. Mateta",
+      "number": 14,
+      "pos": "F",
+      "grid": null
+     }
+    }
+   ]
+  }
+ ]
+}

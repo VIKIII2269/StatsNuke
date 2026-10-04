@@ -1,0 +1,21 @@
+{
+ "get": "status",
+ "parameters": [],
+ "errors": [],
+ "results": 0,
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "response": {
+  "subscription": {
+   "plan": "Free",
+   "end": "2027-10-04T00:00:00+00:00",
+   "active": true
+  },
+  "requests": {
+   "current": 0,
+   "limit_day": 100
+  }
+ }
+}

@@ -1,0 +1,432 @@
+{
+ "get": "fixtures/lineups",
+ "parameters": {
+  "fixture": "1035370"
+ },
+ "errors": [],
+ "results": 2,
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "response": [
+  {
+   "team": {
+    "id": 65,
+    "name": "Nottingham Forest",
+    "logo": "https://media.api-sports.io/football/teams/65.png",
+    "colors": {
+     "player": {
+      "primary": "ff0000",
+      "number": "ffffff",
+      "border": "ff0000"
+     },
+     "goalkeeper": {
+      "primary": "ffff33",
+      "number": "ffffff",
+      "border": "ffff33"
+     }
+    }
+   },
+   "coach": {
+    "id": 16,
+    "name": "Nuno Espírito Santo",
+    "photo": "https://media.api-sports.io/football/coachs/16.png"
+   },
+   "formation": "4-2-3-1",
+   "startXI": [
+    {
+     "player": {
+      "id": 50999,
+      "name": "M. Turner",
+      "number": 1,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 2468,
+      "name": "G. Montiel",
+      "number": 29,
+      "pos": "D",
+      "grid": "2:4"
+     }
+    },
+    {
+     "player": {
+      "id": 25916,
+      "name": "M. Niakhaté",
+      "number": 19,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 363695,
+      "name": "Murillo",
+      "number": 40,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 2771,
+      "name": "O. Aina",
+      "number": 43,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 19305,
+      "name": "R. Yates",
+      "number": 22,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 275170,
+      "name": "Danilo",
+      "number": 28,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 153430,
+      "name": "A. Elanga",
+      "number": 21,
+      "pos": "M",
+      "grid": "4:3"
+     }
+    },
+    {
+     "player": {
+      "id": 18746,
+      "name": "M. Gibbs-White",
+      "number": 10,
+      "pos": "M",
+      "grid": "4:2"
+     }
+    },
+    {
+     "player": {
+      "id": 6056,
+      "name": "N. Domínguez",
+      "number": 16,
+      "pos": "M",
+      "grid": "4:1"
+     }
+    },
+    {
+     "player": {
+      "id": 18931,
+      "name": "C. Wood",
+      "number": 11,
+      "pos": "F",
+      "grid": "5:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 138780,
+      "name": "N. Williams",
+      "number": 7,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 2298,
+      "name": "C. Hudson-Odoi",
+      "number": 14,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 17365,
+      "name": "H. Toffolo",
+      "number": 15,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 18739,
+      "name": "W. Boly",
+      "number": 30,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 24882,
+      "name": "O. Mangala",
+      "number": 5,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 557,
+      "name": "O. Vlachodimos",
+      "number": 23,
+      "pos": "G",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 2991,
+      "name": "C. Kouyaté",
+      "number": 8,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 41577,
+      "name": "Nuno Tavares",
+      "number": 3,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 1746,
+      "name": "J. Worrall",
+      "number": 4,
+      "pos": "D",
+      "grid": null
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": 33,
+    "name": "Manchester United",
+    "logo": "https://media.api-sports.io/football/teams/33.png",
+    "colors": {
+     "player": {
+      "primary": "26504f",
+      "number": "ffffff",
+      "border": "26504f"
+     },
+     "goalkeeper": {
+      "primary": "666666",
+      "number": "ffffff",
+      "border": "666666"
+     }
+    }
+   },
+   "coach": {
+    "id": 1993,
+    "name": "E. ten Hag",
+    "photo": "https://media.api-sports.io/football/coachs/1993.png"
+   },
+   "formation": "4-2-3-1",
+   "startXI": [
+    {
+     "player": {
+      "id": 526,
+      "name": "A. Onana",
+      "number": 24,
+      "pos": "G",
+      "grid": "1:1"
+     }
+    },
+    {
+     "player": {
+      "id": 18846,
+      "name": "A. Wan-Bissaka",
+      "number": 29,
+      "pos": "D",
+      "grid": "2:4"
+     }
+    },
+    {
+     "player": {
+      "id": 742,
+      "name": "R. Varane",
+      "number": 19,
+      "pos": "D",
+      "grid": "2:3"
+     }
+    },
+    {
+     "player": {
+      "id": 18772,
+      "name": "J. Evans",
+      "number": 35,
+      "pos": "D",
+      "grid": "2:2"
+     }
+    },
+    {
+     "player": {
+      "id": 886,
+      "name": "Diogo Dalot",
+      "number": 20,
+      "pos": "D",
+      "grid": "2:1"
+     }
+    },
+    {
+     "player": {
+      "id": 284322,
+      "name": "K. Mainoo",
+      "number": 37,
+      "pos": "M",
+      "grid": "3:2"
+     }
+    },
+    {
+     "player": {
+      "id": 174,
+      "name": "C. Eriksen",
+      "number": 14,
+      "pos": "M",
+      "grid": "3:1"
+     }
+    },
+    {
+     "player": {
+      "id": 9971,
+      "name": "Antony",
+      "number": 21,
+      "pos": "M",
+      "grid": "4:3"
+     }
+    },
+    {
+     "player": {
+      "id": 1485,
+      "name": "Bruno Fernandes",
+      "number": 8,
+      "pos": "M",
+      "grid": "4:2"
+     }
+    },
+    {
+     "player": {
+      "id": 284324,
+      "name": "A. Garnacho",
+      "number": 17,
+      "pos": "M",
+      "grid": "4:1"
+     }
+    },
+    {
+     "player": {
+      "id": 909,
+      "name": "M. Rashford",
+      "number": 10,
+      "pos": "F",
+      "grid": "5:1"
+     }
+    }
+   ],
+   "substitutes": [
+    {
+     "player": {
+      "id": 903,
+      "name": "S. McTominay",
+      "number": 39,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 157997,
+      "name": "A. Diallo",
+      "number": 16,
+      "pos": "F",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 739,
+      "name": "Sergio Reguilón",
+      "number": 15,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 50132,
+      "name": "A. Bayındır",
+      "number": 1,
+      "pos": "G",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 70078,
+      "name": "F. Pellistri",
+      "number": 28,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 303010,
+      "name": "D. Gore",
+      "number": 44,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 288112,
+      "name": "W. Kambwala",
+      "number": 53,
+      "pos": "D",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 180560,
+      "name": "H. Mejbri",
+      "number": 46,
+      "pos": "M",
+      "grid": null
+     }
+    },
+    {
+     "player": {
+      "id": 547,
+      "name": "D. van de Beek",
+      "number": 34,
+      "pos": "M",
+      "grid": null
+     }
+    }
+   ]
+  }
+ ]
+}
