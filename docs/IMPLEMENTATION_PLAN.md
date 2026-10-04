@@ -13,7 +13,7 @@ Phases are gated by their **exit criteria, not by the calendar**. The spec's §1
 | 0 | Collect and score | **Built** (collector goes live once merged to `main`; see §0.4) |
 | 1 | Lake, entities, walk-forward harness | **Done**: every gate passes on the full real data (§2.2) |
 | 2 | Team level (M1–M3, G0–G3) | **Done**: exit gate met as non-inferiority, fused ties the market (§3.2) |
-| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline, BPS rules and benchmarks built (§4.1–4.2) |
+| 3 | Match and player level (G4–G6, M4–M10, simulator) | **In progress**: event timeline, BPS rules, benchmarks, goal process and emulator built (§4.1–4.3) |
 | 4 | Decisions (MILP, season replay, paper ledger) | Planned |
 | 5 | Extensions, each gated by an ablation | Planned |
 | 6 | Operations (VPS, Dagster, Telegram, monitoring) | Planned |
@@ -347,6 +347,65 @@ Paired differences in MSE (95 % gameweek-block CI, DM p):
 | Last 5 − A0 | +0.333 | [0.279, 0.385] | |
 
 The replica clears both floors, so the simulator's exit bar is MSE 3.66 on these rows. A0 still ranks all rows best (Spearman 0.714): its minutes model separates benched from starting players. The replica ranks players who played better (0.371 vs 0.331). The simulator needs both.
+
+### 4.3 In-match goal process (G4–G6) and the emulator
+
+`fplh evaluate g-ladder --season 2022-23 --season 2023-24 --season 2024-25` fits G4–G6 on 2,660 matches from 2015/16 to 2021/22, builds their emulators and scores them at the tuning-season deadlines. It writes `configs/models/goal_process.yaml`. The first run takes about an hour; reruns take about 7 minutes because emulators and walk-forward runs are cached by their inputs.
+
+**The model** (`models/goal_process.py`): a per-minute goal intensity built from
+- each match's pre-match expected goals (M1 as the offset);
+- an 18-bin time profile plus a stoppage bin;
+- game-state effects by goal difference and time bucket;
+- red-card effects;
+- a Gamma match frailty, which integrates out exactly, so the likelihood and gradient are closed-form (the spec's log-normal has no closed form);
+- a red-card hazard;
+- a second-half stoppage survival curve.
+
+G6 takes its game-state effects from non-penalty shots (about 10× the events) plus a shrunk per-state conversion offset. Fits take 0.4–2 s. A test recovers known state effects from 6,000 simulated matches.
+
+Fitted values:
+- **Red cards:** your own red multiplies your scoring rate by e^−0.54 ≈ 0.58; the opponent's red by e^0.60 ≈ 1.82. The red hazard rises through the match.
+- **Frailty:** variance fits to ≈ 0. Goals are not overdispersed; Pearson φ̂ is 0.77–1.11 per season and below 1 in 5 of 7. So the frailty effectively drops out, as the spec allows.
+- **Game state:** effects are small. A team trailing by one after minute 75 scores about 10 % more.
+- **Time profile:** the rate rises through the match, with a bump at minutes 45–49 where first-half stoppage time is recorded.
+
+**Ladder** (M1 deadline rates, 1,140 fixtures; differences a − b with 95 % gameweek-block CIs):
+
+| Model | Scoreline log loss | 1X2 log loss | RPS |
+|---|---|---|---|
+| G0 Poisson | 3.0007 | 0.9600 | 0.19712 |
+| G1 Dixon–Coles | 3.0014 | 0.9594 | 0.19708 |
+| G4 | 3.0009 | 0.9598 | 0.19713 |
+| G5 | 3.0017 | 0.9597 | 0.19714 |
+| G6 | 3.0010 | 0.9596 | 0.19712 |
+
+| Comparison | Scoreline log-loss difference (95 % CI) |
+|---|---|
+| G4 − G0 | +0.00002 [−0.0024, 0.0027] |
+| G5 − G4 | +0.0007 [−0.0009, 0.0024] |
+| G6 − G5 | −0.0007 [−0.0018, 0.0004] |
+
+None of these is significant, as with G1–G3 in Phase 2: pre-match scorelines are Poisson to within what three seasons can resolve. **G0 stays the pre-match default.** The simulator needs in-match dynamics, so it uses the highest level not significantly worse than its predecessor: **G6**.
+
+**§8.5 team checks:**
+
+| Check | Result | Target |
+|---|---|---|
+| Emulator vs a 2·10⁵-draw direct simulation, 60 random mean-goal pairs × 4 probabilities | mean abs 0.0013, max 0.0050 (the reference's own SE is 0.0011); mean goals within 0.012 | max ≤ 0.005 |
+| Market reproduction: two-rate inversion of de-vigged 1X2 + O/U 2.5 (1,057 fixtures) | mean abs 0.0048 (G1: 0.0029) | within 0.002 of G1 |
+| Draw rate, observed − predicted | +0.010, CI [−0.013, 0.032] | CI covers 0 |
+| Scoreline cells up to 4–4 inside their block CIs | 25 / 25 | ≥ 90 % |
+| In-play next-goal ECE from the actual state at 15–75′ (5,700 forecasts): home / away / none | 0.015 / **0.024** / 0.014 | ≤ 0.02 |
+
+- **The away miss is real, not noise:** a perfectly calibrated forecaster scores ≤ 0.018 at the 95th percentile on these forecasts.
+- **Pattern:** at 15′ the split is exact. From 30′, "away scores next" is under-predicted by 2–4 points.
+- **Not a missing model term:** the training-period residuals by side × time bucket and side × goal difference are all within |z| < 1.4.
+- **So it is a shift in the tuning seasons:** away teams score relatively more as the match goes on. Refitting on recent seasons (or a side × time term once the data supports it) is left for the player-level PRs to revisit.
+
+**Emulator.**
+- A 20 × 20 log-spaced grid of nominal rates × 10⁵ simulations with common random numbers, plus a smoothing bicubic spline per output. That's about 1/20 of the spec's 60² × 10⁵ (gap 5).
+- Mean goals are inverted to nominal rates by 2-D Newton. Wrapped as a `GoalModel`, it plugs into market inversion and fusion unchanged.
+- Emulators are cached in gold by parameter hash.
 
 ## 5. Phase 4: Decisions
 
