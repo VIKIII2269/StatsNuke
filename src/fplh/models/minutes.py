@@ -190,7 +190,7 @@ class MinutesPredictor:
     refit_every: int = 4
     rounds: int = ROUNDS
     name: str = "minutes"
-    version: str = "3"
+    version: str = "4"
     _model: MinutesModel | None = field(default=None, repr=False)
     _calls: int = field(default=0, repr=False)
 

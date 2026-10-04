@@ -47,6 +47,12 @@ def player_history(info: InformationSet) -> pd.DataFrame:
     return pm
 
 
+def _days(t: pd.Series) -> pd.Series:
+    """Days since the epoch, whatever the timestamp unit (µs in some tables, ns in others)."""
+    out: pd.Series = (pd.to_datetime(t, utc=True) - pd.Timestamp(0, tz="UTC")).dt.total_seconds()
+    return out / 86400
+
+
 def _rest_days(info: InformationSet, rows: pd.DataFrame) -> pd.Series:
     """Days between the team's previous scheduled fixture and this one (schedule is public)."""
     dim = info.table("dim_fixture")
@@ -90,15 +96,13 @@ def minutes_features(info: InformationSet, rows: pd.DataFrame) -> pd.DataFrame:
     out["depth_rank"] = rate.groupby(grp).rank(ascending=False, method="min")
     out["rest_days"] = _rest_days(info, rows)
     last = trailing_means(
-        hist[hist["minutes"] > 0].assign(t=lambda d: d["kickoff_at"].astype("int64") / 8.64e13),
+        hist[hist["minutes"] > 0].assign(t=lambda d: _days(d["kickoff_at"])),
         "player_uid",
         ("t",),
         (1,),
         rows,
     )["t_1"]
-    out["days_since_appearance"] = (rows["kickoff_at"].astype("int64") / 8.64e13 - last).clip(
-        upper=365
-    )
+    out["days_since_appearance"] = (_days(rows["kickoff_at"]) - last).clip(upper=365)
     snap = info.table("snap_fpl_player")
     if not snap.empty and "chance_of_playing_next_round" in snap:
         s = snap.assign(player_uid="fpl:" + snap["code"].astype(str))

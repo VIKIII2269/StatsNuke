@@ -9,7 +9,13 @@ from fplh.features.leakage import check_leakage
 from fplh.features.minutes import minutes_features
 from fplh.features.spine import SPINE_KEYS, build_spine
 from fplh.models.attack import fit_attack
-from fplh.models.minutes import Isotonic, MinutesModel, MinutesPredictor, subs_used_per_side
+from fplh.models.minutes import (
+    Isotonic,
+    MinutesModel,
+    MinutesPredictor,
+    labelled_rows,
+    subs_used_per_side,
+)
 from tests.synthetic_silver import deadlines, make, with_understat
 
 
@@ -24,6 +30,30 @@ def keyed(info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
 def test_minutes_features_are_leak_free() -> None:
     f = frames()
     assert check_leakage(f, deadlines(f), {"minutes": keyed}, horizon=1) == []
+
+
+def test_spine_features_equal_training_features_whatever_the_time_unit() -> None:
+    """A spine row at D and the same player-fixture as a training row later must share
+    features (regression: day counts once mixed µs and ns timestamps)."""
+    f = frames()
+    store = SilverStore.from_frames(f)
+    ds = deadlines(f)
+    d = ds[len(ds) // 2]
+    info = InformationSet.at(d, store)
+    spine = build_spine(info, 1)
+    spine["kickoff_at"] = spine["kickoff_at"].dt.as_unit("ns")  # as the real dim_fixture
+    late = InformationSet.at(ds[-1] + pd.Timedelta(days=30), store)
+    rows = labelled_rows(late)
+    rows = rows[rows["deadline_at"] == d].copy()
+    rows["kickoff_at"] = rows["kickoff_at"].dt.as_unit("us")
+    a = minutes_features(info, spine).set_index(spine["player_uid"] + "|" + spine["fixture_uid"])
+    b = minutes_features(late, rows).set_index(
+        (rows["player_uid"] + "|" + rows["fixture_uid"]).to_numpy()
+    )
+    common = a.index.intersection(b.index)
+    assert len(common) > 0
+    pd.testing.assert_frame_equal(a.loc[common], b.loc[common], check_dtype=False)
+    assert a["days_since_appearance"].dropna().between(0, 365).all()
 
 
 def test_isotonic_is_monotone_and_bounded() -> None:
