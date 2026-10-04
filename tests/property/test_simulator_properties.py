@@ -7,11 +7,15 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from scipy.stats import chi2_contingency
 
+from fplh.models.bonus import BonusModel
+from fplh.models.gk import SaveModel
 from fplh.models.goal_process import GoalProcessParams
 from fplh.rules.config import load_rules
+from fplh.rules.engine import score_arrays
 from fplh.settings import get_settings
 from fplh.sim.simulator import (
     FULL,
+    Components,
     FixtureInputs,
     League,
     SideInputs,
@@ -123,3 +127,77 @@ def test_team_goals_follow_the_team_only_simulation() -> None:
             [np.bincount(cells[:20_000], minlength=6), np.bincount(cells[20_000:], minlength=6)]
         )
         assert chi2_contingency(table).pvalue > 1e-3
+
+
+def full_side(prefix: str, seed: int) -> SideInputs:
+    s = side(prefix, seed)
+    rng = np.random.default_rng(seed + 100)
+    n = len(s)
+    s.yellow_rate = rng.uniform(0.0, 0.4, n)
+    s.save_mult = np.where(s.position == "GK", rng.uniform(0.8, 1.2, n), 1.0)
+    s.dc_rate = rng.uniform(0.5, 6.0, (n, 3))
+    s.dc_size = np.full(n, 6.0)
+    return s
+
+
+BONUS = BonusModel(
+    weights={
+        "minutes_lt_60": 3,
+        "minutes_gte_60": 6,
+        "goal_FWD": 24,
+        "goal_MID": 18,
+        "goal_DEF": 12,
+        "assist": 9,
+        "clean_sheet": 12,
+        "save": 2,
+    },
+    sigma={f"{p}:{b}": 4.0 for p in ("GK", "DEF", "MID", "FWD") for b in ("lt60", "60")},
+)
+COMPONENTS = Components(SaveModel(), BONUS)
+
+
+@settings(max_examples=15, deadline=None)
+@given(st.integers(0, 10_000), st.floats(0.3, 3.5), st.floats(0.3, 3.5), st.booleans())
+def test_component_events_are_consistent(seed: int, lh: float, la: float, dc: bool) -> None:
+    rules = load_rules("2025/26" if dc else "2024/25")
+    fx = FixtureInputs("s:h:a", (lh, la), (full_side("h", seed), full_side("a", seed + 1)), 5)
+    r = simulate_fixture(fx, PARAMS, rules, League(), TimingModel(), 300, seed, COMPONENTS)
+    bonus_total = np.zeros(300, dtype=np.int64)
+    for k, sd in enumerate(r.sides):
+        ev = sd.events
+        played = ev["minutes"] > 0
+        gk = sd.position == "GK"
+        # cards: at most one yellow, never with a red; only players who played
+        assert ev["yellow_cards"].max() <= 1
+        assert not ((ev["yellow_cards"] > 0) & (ev["red_cards"] > 0)).any()
+        assert not (ev["yellow_cards"][~played] > 0).any()
+        # saves only by goalkeepers who played; saved penalties are the opponent's misses
+        assert (ev["saves"][:, ~gk] == 0).all() and not (ev["saves"][~played] > 0).any()
+        opp_missed = r.sides[1 - k].events["penalties_missed"].sum(1)
+        assert (ev["penalties_saved"].sum(1) <= opp_missed).all()
+        # defensive actions only when the rules score them, and only for players who played
+        acts = sum(ev[a] for a in ("clearances_blocks_interceptions", "tackles", "recoveries"))
+        assert (acts.sum() > 0) == dc
+        assert not (acts[~played] > 0).any()
+        # bonus never goes to players who did not play
+        assert not (ev["bonus"][~played] > 0).any()
+        bonus_total += ev["bonus"].sum(1)
+        # points equal the sum of the scoring components
+        parts = score_arrays(ev, np.broadcast_to(sd.position, ev["minutes"].shape), rules)
+        assert (sum(parts.values()) == sd.points).all()
+    # someone wins the three-point bonus in every match (ties can only add)
+    assert (bonus_total >= 6).all()
+
+
+def test_saves_and_cards_match_their_rates() -> None:
+    h, a = full_side("h", 8), full_side("a", 9)
+    fx = FixtureInputs("s:h:a", (1.4, 1.1), (h, a), 5, mean_goals=(1.5, 1.2))
+    r = simulate_fixture(fx, PARAMS, RULES, League(), TimingModel(), 20_000, 5, COMPONENTS)
+    sd = r.sides[0]
+    ev = sd.events
+    m = ev["minutes"] / 90
+    gk = h.position == "GK"
+    expected = COMPONENTS.saves.mean(1.2, ev["minutes"], h.save_mult[None, :])[:, gk]
+    assert abs(ev["saves"][:, gk].mean() - expected.mean()) < 0.03
+    p_yellow = (1 - np.exp(-h.yellow_rate[None, :] * m)) * (ev["red_cards"] == 0)
+    assert abs(ev["yellow_cards"].mean() - p_yellow.mean()) < 0.003

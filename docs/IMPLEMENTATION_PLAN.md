@@ -293,9 +293,9 @@ Decisions:
 | 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, L-BFGS-B inversion | Market reproduction error within tolerance; cached per model version |
 | 3.3 | `models/minutes.py` (M4): staged XGBoost with monotone constraints, isotonic calibration, substitution-era shift, news overlay (gap 1) | **Built** (§4.4): ECE 0.002 / 0.004; A4 beats naive |
 | 3.4 | `models/attack.py` (M5/M6): conjugate Gamma-Poisson with decay, shrunk shot quality and finishing, penalties and own goals | **Built** (§4.4): A5 logged |
-| 3.5 | `models/defence.py` (M7): NegBin by game state | Threshold Brier and PIT; walk-forward within 2025/26 + live (open question 1c) |
-| 3.6 | `models/gk.py`, `models/cards.py`, `models/bonus.py` (M8–M10; BPS weights from the rules YAML `bps` block) | Save-point log loss; card Brier; bonus accuracy |
-| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | Core **built** (§4.4): property tests pass; M7–M10 and the full §8.5 suite follow in PRs 5–6 |
+| 3.5 | `models/defence.py` (M7): NegBin with definition-drift rescaling and an opponent factor | **Built** (§4.5): threshold Brier beats the position mean within 2018/19 and 2025/26 |
+| 3.6 | `models/gk.py`, `models/cards.py`, `models/bonus.py` (M8–M10; effective BPS weights, official table as reference) | **Built** (§4.5): each beats its baseline |
+| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | **Built** (§4.4–4.5): property tests pass; the full §8.5 suite runs in PR 6 |
 | 3.8 | `evaluate/attribution.py` (§11.5) | Decomposition sums to total error on every row |
 
 Exit: §8.5 validation passes; the simulator beats OpenFPL and the naive floors walk-forward; the `ep_next` comparison runs on live gameweeks (gap 2).
@@ -490,6 +490,79 @@ Property tests (Hypothesis) check:
 - the team-goal distribution matching the team-only simulation (χ²).
 
 10 fixtures × 5,000 simulations take 2.2 s (target ≤ 15 s). Cards, saves, defensive contributions and bonus come with M7–M10 in PR 5.
+
+### 4.5 Defence (M7), saves (M8), cards (M9) and bonus (M10)
+
+`fplh evaluate components --season 2022-23 --season 2023-24 --season 2024-25 --part cards --part saves --part bonus --part defence` refits every model at each deadline. It scores each one given the player's actual minutes; bonus is scored given the match's actual events. So each model is judged on what it adds to the simulator. Runtime is about 15 minutes. All CIs are 95 % gameweek-block bootstraps.
+
+**M9 cards** (`models/cards.py`): a decayed Gamma–Poisson yellow rate per 90, shrunk to position × role.
+- In FPL data a yellow never comes with a red, and there is never more than one yellow. So the simulator draws at most one yellow, removes it on a red, and sends off the player ∝ yellow rate.
+- No game-state or referee term: yellow minutes are not identifiable, and the referee is known only after the match.
+
+| Target | n | Model | Position rate | Difference (95 % CI) | ECE |
+|---|---|---|---|---|---|
+| Yellow (Brier) | 34,156 | 0.1121 | 0.1127 | −0.0006 [−0.0009, −0.0003] | 0.021 |
+
+**M8 saves** (`models/gk.py`): saves ~ NegBin(m · g_k · (a + b·μ_opp)), where μ_opp is the opponent's M1 pre-match rate (point in time).
+- Given μ, the match's realised goals add nothing (coefficient 0.04), so saves are drawn independently of simulated goals. Fitted: a ≈ 1.17, b ≈ 1.24, NegBin size ≈ 14.
+- The keeper multiplier g_k is shrunk heavily; its spread is about ±2 %.
+- 75 % of missed penalties are saved (FPL counts saved penalties as missed), so the simulator gives the opposing keeper on the pitch that share.
+
+| Save points (log loss) | n | Model | Baseline | Difference (95 % CI) |
+|---|---|---|---|---|
+| vs league rate per 90 | 2,316 | 0.9683 | 1.0188 | −0.049 [−0.066, −0.033] |
+| vs opponent only (g_k = 1) | 2,316 | 0.9683 | 0.9701 | −0.002 [−0.004, 0.001] |
+
+The opponent's rate carries the model. The keeper multiplier is not significant, and shrinkage keeps it near 1. Mean saves: 3.10 predicted, 3.05 observed.
+
+**M10 bonus** (`models/bonus.py`): BPS = effective weights × simulated events + a residual by position × minutes band + the player's shrunk mean residual (δ_p) + noise. Bonus then comes from the official allocation over players who played (`assign_bonus_array(eligible = minutes > 0)`).
+- Effective weights come from least squares over the last two seasons, because tables change; for example a forward's goal is about 23, against the table's 24.
+- δ_p (spread about ±1 BPS) carries passing and other actions the simulator does not generate.
+- Baselines: "official" applies the YAML table to the same events with no residual; "position" is the position's bonus rate per appearance.
+
+| Target | Model | Official table | Position | Model − official (95 % CI) |
+|---|---|---|---|---|
+| P(bonus > 0) (Brier) | 0.0356 | 0.0695 | 0.0939 | −0.034 [−0.037, −0.031] |
+| E[bonus] (squared error) | 0.1428 | 0.2476 | 0.4464 | −0.106 [−0.115, −0.095] |
+| E[bonus] (absolute error) | 0.1345 | 0.1493 | 0.3756 | −0.015 [−0.019, −0.011] |
+
+These cover 34,295 player-fixtures. Against the position rate, every difference is −0.058 or larger, and every CI excludes 0.
+
+**M7 defensive actions** (`models/defence.py`). Data exist only for 2016/17–2018/19 and from 2025/26, so the model is evaluated walk-forward within 2018/19 and within 2025/26. That is the documented exception to the untouched holdout (open question 1c). It is active in the simulator only when the season's rules score defensive contribution.
+
+Definition drift:
+- Each (position, action) rate per 90 is compared between eras. More than 10 % apart rescales the old counts.
+- Tackles per 90 doubled in 2025/26 (×2.06 for DEF and MID); recoveries fell to about 0.73×; DEF CBI stayed within tolerance.
+- The definitions changed, not the football: DEF CBI+T is about 7.5 per 90 in both eras.
+
+The model:
+- per-action decayed Gamma–Poisson rates, shrunk to position × role;
+- an opponent multiplier (±5 %);
+- a Gamma frailty per player-match shared by the actions, so the group total is NegBin (size 7.5 for DEF, 9.5 for MID). It is fitted by method of moments.
+- No game-state term, because action timing is not in our sources.
+
+Threshold Brier at the 2025/26 thresholds, against the position's mean rate with the same dispersion:
+
+| Target | Window | n | Model | Position | Difference (95 % CI) | Mean predicted / observed |
+|---|---|---|---|---|---|---|
+| DEF CBI+T ≥ 10 | 2018/19 | 3,542 | 0.1225 | 0.1383 | −0.016 [−0.020, −0.012] | 0.210 / 0.171 |
+| DEF CBI+T ≥ 10 | 2025/26 | 3,950 | 0.1297 | 0.1482 | −0.019 [−0.022, −0.015] | 0.215 / 0.208 |
+| MID/FWD CBI+T+R ≥ 12 | 2018/19 | 6,174 | 0.0745 | 0.0885 | −0.014 [−0.017, −0.011] | 0.131 / 0.118 |
+| MID/FWD CBI+T+R ≥ 12 | 2025/26 | 6,775 | 0.0596 | 0.0692 | −0.010 [−0.012, −0.008] | 0.096 / 0.088 |
+
+- The 2018/19 over-prediction for DEF follows a fast fall in defenders' CBI+T across 2016–19 (8.2 → 7.4 → 6.5 per 90), which a 365-day half-life lags.
+- In 2025/26 the bias is small (ECE 0.024 DEF, 0.015 MID/FWD). Its half-life is not tuned on 2025/26, to keep the holdout exception narrow.
+
+**Simulator.** M7–M10 are optional inputs; without them those events stay at zero. Property tests (Hypothesis) check:
+- at most one yellow, none with a red;
+- saves only by keepers who played;
+- saved penalties never exceed the opponent's misses;
+- defensive actions only when the rules score them;
+- no bonus for players who did not play, with at least 6 bonus points per match;
+- points equal the sum of components;
+- simulated saves and yellow rates match their means.
+
+10 fixtures × 5,000 simulations with every component take 3.8 s.
 
 ## 5. Phase 4: Decisions
 
