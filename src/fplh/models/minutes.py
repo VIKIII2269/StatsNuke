@@ -7,12 +7,15 @@
 * trained walk-forward on every player-fixture observable at the deadline, each
   featurised at its own round deadline (``features.minutes``), refit every 4 deadlines.
 
-Team consistency (applied after calibration, per team and fixture): Σ π^S over the
-registered players is scaled to 11, and the expected substitute appearances
-Σ (1 − π^S)·π^B to the substitutes a side actually uses under the fixture's limit,
-estimated from the lineups observable at the deadline (2.75 under three substitutes,
-3.76 under five). Trees cannot extrapolate the 2022/23 move to five substitutes from
-a history of three; the scaling makes π^B calibrated across it.
+Substitution era: the features carry no era, so trees cannot extrapolate the 2022/23 move
+to five substitutes from a history of three. π^B therefore gets a logit shift per
+substitution limit L: the shift that moves the model's mean π^B over the training bench
+rows played under L to the appearance rate observed on those same rows. Measuring the
+shift on the era's own rows controls for its population (squad sizes differ by season;
+a rate-ratio between eras over-predicted 2022/23 by 0.03). Before 2022/23 the only
+five-substitute rows are the 2019/20 restart. No per-team normalisation: a deadline's
+squad list also holds departed and long-term absent players, and scaling over it biased
+every probability.
 
 The news overlay of gap 1 is a no-op until snapshot captures exist: ``chance_of_playing``
 is a feature that is missing (never imputed) before our own captures began. Horizon
@@ -29,7 +32,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import xgboost as xgb
-from scipy.optimize import isotonic_regression
+from scipy.optimize import brentq, isotonic_regression
 
 from fplh.features.information_set import InformationSet
 from fplh.features.minutes import minutes_features, player_history
@@ -129,7 +132,7 @@ def subs_used_per_side(info: InformationSet) -> dict[int, float]:
 @dataclass
 class MinutesModel:
     stages: dict[str, _Stage] = field(default_factory=dict)
-    subs_per_side: dict[int, float] = field(default_factory=dict)
+    sub_shift: dict[int, float] = field(default_factory=dict)  # logit shift of π^B by limit
 
     @classmethod
     def fit(cls, info: InformationSet, rounds: int = ROUNDS) -> MinutesModel:
@@ -141,28 +144,43 @@ class MinutesModel:
             "full": fit_stage(x[started], rows.loc[started, "y_full"].to_numpy(), rounds),
             "sub": fit_stage(x[~started], rows.loc[~started, "y_sub"].to_numpy(), rounds),
         }
-        return cls(stages, subs_used_per_side(info))
+        p_bench = stages["sub"].predict(x[~started])
+        y_bench = rows.loc[~started, "y_sub"].to_numpy()
+        limit = _limits(rows.loc[~started, "kickoff_at"])
+        shift = {
+            int(lim): _logit_shift(p_bench[limit == lim], float(y_bench[limit == lim].mean()))
+            for lim in np.unique(limit)
+        }
+        return cls(stages, shift)
 
     def predict(self, info: InformationSet, rows: pd.DataFrame) -> pd.DataFrame:
         """``rows``: player_uid, fixture_uid, team, position, kickoff_at, deadline_at."""
         x = minutes_features(info, rows)
         p = pd.DataFrame({f"p_{s}": self.stages[s].predict(x) for s in STAGES}, index=rows.index)
-        grp = [rows["fixture_uid"], rows["team"]]
-        total = p["p_start"].groupby(grp).transform("sum")
-        p["p_start"] = (p["p_start"] * 11 / total.where(total > 0, 11)).clip(0.0, 1.0)
-        if self.subs_per_side:
-            rules = load_substitution_rules()
-            fallback = self.subs_per_side[max(self.subs_per_side)]  # unseen limit
-            target = np.array(
-                [
-                    self.subs_per_side.get(rules.limit(pd.Timestamp(k)), fallback)
-                    for k in rows["kickoff_at"]
-                ]
+        if self.sub_shift:
+            fallback = self.sub_shift[max(self.sub_shift)]  # an unseen limit: the largest known
+            delta = np.array(
+                [self.sub_shift.get(int(v), fallback) for v in _limits(rows["kickoff_at"])]
             )
-            expected = ((1 - p["p_start"]) * p["p_sub"]).groupby(grp).transform("sum")
-            scale = target / expected.where(expected > 0, np.nan).to_numpy()
-            p["p_sub"] = np.clip(p["p_sub"] * np.nan_to_num(scale, nan=1.0), 0.0, 0.99)
+            q = np.clip(p["p_sub"].to_numpy(), 1e-6, 1 - 1e-6)
+            p["p_sub"] = 1 / (1 + np.exp(-(np.log(q / (1 - q)) + delta)))
         return p
+
+
+def _limits(kickoffs: pd.Series) -> npt.NDArray[np.int64]:
+    rules = load_substitution_rules()
+    return np.array([rules.limit(pd.Timestamp(k)) for k in kickoffs], dtype=np.int64)
+
+
+def _logit_shift(p: Array, target: float) -> float:
+    """δ with mean(σ(logit p + δ)) = target: moves an era's mean predicted appearance
+    rate to the rate observed in that era."""
+    if len(p) == 0 or not 0 < target < 1:
+        return 0.0
+    q = np.clip(p, 1e-6, 1 - 1e-6)
+    lg = np.log(q / (1 - q))
+    out: float = brentq(lambda d: float(np.mean(1 / (1 + np.exp(-(lg + d))))) - target, -10, 10)
+    return out
 
 
 @dataclass
@@ -172,7 +190,7 @@ class MinutesPredictor:
     refit_every: int = 4
     rounds: int = ROUNDS
     name: str = "minutes"
-    version: str = "1"
+    version: str = "3"
     _model: MinutesModel | None = field(default=None, repr=False)
     _calls: int = field(default=0, repr=False)
 
