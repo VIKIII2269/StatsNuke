@@ -40,12 +40,14 @@ from fplh.models.gk import fit_saves
 from fplh.models.goal_process import GoalProcessParams
 from fplh.models.minutes import MinutesModel
 from fplh.models.team_strength import TeamStrengthParams, run_filter
-from fplh.rules.config import load_rules
+from fplh.rules.config import Rules, load_rules
 from fplh.rules.football import load_substitution_rules
+from fplh.settings import get_settings
 from fplh.sim.emulator import Emulator
 from fplh.sim.simulator import (
     Components,
     FixtureInputs,
+    FixtureResult,
     League,
     SideInputs,
     SideResult,
@@ -71,6 +73,17 @@ def prematch_from_info(info: InformationSet, params: TeamStrengthParams) -> pd.D
         dim[[*keys, "fixture_uid"]], on=keys
     )
     return out
+
+
+def rules_for(season: str) -> Rules:
+    """The season's scoring rules; a season without a rules file (not yet published)
+    uses the latest one."""
+    try:
+        return load_rules(season.replace("-", "/"))
+    except FileNotFoundError:
+        files = sorted((get_settings().configs_dir / "rules").glob("fpl_*.yaml"))
+        latest = files[-1].stem.removeprefix("fpl_").replace("_", "/")
+        return load_rules(latest)
 
 
 def naive_minutes(x: pd.DataFrame) -> pd.DataFrame:
@@ -111,6 +124,15 @@ def summarise_side(side: SideResult, uids: np.ndarray, fixture_uid: str) -> pd.D
 
 
 @dataclass
+class Prepared:
+    spine: pd.DataFrame
+    fixtures: list[tuple[FixtureInputs, Rules]]
+    league: League
+    timing: TimingModel
+    components: Components
+
+
+@dataclass
 class PlayerSimulator:
     """Walk-forward predictor (``Predictor`` protocol) over the deadline spine."""
 
@@ -144,7 +166,8 @@ class PlayerSimulator:
             r["goal_rate"] = np.where(raw.isna(), fill, raw.to_numpy())
         return r
 
-    def predict(self, info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
+    def prepare(self, info: InformationSet, spine: pd.DataFrame) -> Prepared:
+        """Fit every component on 𝓘(D) and build the simulator inputs per fixture."""
         spine = spine.reset_index(drop=True)
         mins = self._minutes(info, spine).reset_index(drop=True)
         self._calls += 1
@@ -162,7 +185,6 @@ class PlayerSimulator:
             assist_share=lg.get("assist_share", 0.88),
             penalty_misses_per_side=lg.get("penalty_misses_per_side", 0.021),
         )
-        components = Components(saves, bonus)
         subs = load_substitution_rules()
         now = self.rates[self.rates["deadline_at"] == info.deadline]
         mu_of = {
@@ -174,7 +196,7 @@ class PlayerSimulator:
         dc = defence.rates(spine["player_uid"], spine["position"])
         dc = dc * defence.opponent_factor(spine["opponent"])[:, None]
         dc_size = defence.group_size(spine["position"])
-        frames = []
+        fixtures: list[tuple[FixtureInputs, Rules]] = []
         for fixture_uid, rows in spine.groupby("fixture_uid", sort=True):
             if str(fixture_uid) not in mu_of:
                 continue
@@ -182,7 +204,7 @@ class PlayerSimulator:
             nh, na = self.emulator.nominal_for_means(mu[0], mu[1])
             kickoff = pd.Timestamp(rows["kickoff_at"].iloc[0])
             season = str(fixture_uid).split(":")[0]
-            rules = load_rules(season.replace("-", "/"))
+            rules = rules_for(season)
             sides = []
             for home in (True, False):
                 idx = rows.index[rows["was_home"].to_numpy() == home].to_numpy()
@@ -211,15 +233,31 @@ class PlayerSimulator:
                 subs.limit(kickoff),
                 mean_goals=mu,
             )
-            res = simulate_fixture(
-                fx, self.params, rules, league, timing, self.n_sims, self.seed, components
-            )
-            for side, inputs in zip(res.sides, sides, strict=True):
-                frames.append(summarise_side(side, inputs.player_uid, str(fixture_uid)))
-        if not frames:
-            return spine[[*SPINE_KEYS, "position"]].assign(expected_points=np.nan)
-        summary = pd.concat(frames, ignore_index=True)
-        out: pd.DataFrame = spine[[*SPINE_KEYS, "position"]].merge(
-            summary, on=["player_uid", "fixture_uid"], how="left"
+            fixtures.append((fx, rules))
+        return Prepared(spine, fixtures, league, timing, Components(saves, bonus))
+
+    def simulate(self, prep: Prepared, fx: FixtureInputs, rules: Rules) -> FixtureResult:
+        return simulate_fixture(
+            fx,
+            self.params,
+            rules,
+            prep.league,
+            prep.timing,
+            self.n_sims,
+            self.seed,
+            prep.components,
         )
+
+    def predict(self, info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
+        prep = self.prepare(info, spine)
+        frames = []
+        for fx, rules in prep.fixtures:
+            res = self.simulate(prep, fx, rules)
+            for side, inputs in zip(res.sides, fx.sides, strict=True):
+                frames.append(summarise_side(side, inputs.player_uid, fx.fixture_uid))
+        base = prep.spine[[*SPINE_KEYS, "position"]]
+        if not frames:
+            return base.assign(expected_points=np.nan)
+        summary = pd.concat(frames, ignore_index=True)
+        out: pd.DataFrame = base.merge(summary, on=["player_uid", "fixture_uid"], how="left")
         return out

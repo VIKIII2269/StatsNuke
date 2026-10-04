@@ -685,6 +685,65 @@ def evaluate_phase3_cmd(
     typer.echo(f"exit gate: {'PASS' if result.passed else 'FAIL'}")
 
 
+@evaluate_app.command("attribution")
+def evaluate_attribution_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    every: Annotated[int, typer.Option(help="Use every n-th deadline.")] = 1,
+    n_sims: Annotated[int, typer.Option(help="Simulations per fixture.")] = 2000,
+) -> None:
+    """Split the simulator's errors into minutes, goal events and the rest (§11.5)."""
+    import pandas as pd
+
+    from fplh.evaluate.attribution import evaluate_attribution
+    from fplh.evaluate.phase3 import simulator
+    from fplh.features.information_set import SilverStore
+    from fplh.features.spine import historical_deadlines
+
+    lake = Lake(get_settings().lake_uri)
+    store = SilverStore(lake)
+    dim = store.get("dim_fixture")
+    deadlines = [d for s in season for d in historical_deadlines(dim, s)["deadline_at"]]
+    sim = simulator(lake, store, deadlines, n_sims)
+    _, summary = evaluate_attribution(lake, season, sim, every)
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        typer.echo(summary.round(4).to_string(index=False))
+
+
+@evaluate_app.command("ep-next")
+def evaluate_ep_next_cmd(
+    season: Annotated[str, typer.Option(help="A live season with captures, e.g. 2026-27.")],
+    n_sims: Annotated[int, typer.Option(help="Simulations per fixture.")] = 2000,
+) -> None:
+    """The simulator against FPL's ep_next on live gameweeks (captures before the deadline,
+    results available)."""
+    import pandas as pd
+
+    from fplh.evaluate.ep_next import compare_ep_next, ep_next_at
+    from fplh.evaluate.phase3 import run, simulator
+    from fplh.features.information_set import SilverStore
+    from fplh.features.spine import historical_deadlines
+
+    lake = Lake(get_settings().lake_uri)
+    store = SilverStore(lake)
+    dim = store.get("dim_fixture")
+    played = dim.dropna(subset=["home_goals"])
+    deadlines = [
+        d
+        for d, rnd in zip(
+            *(historical_deadlines(dim, season)[c] for c in ("deadline_at", "round")), strict=True
+        )
+        if ((played["season"] == season) & (played["round"] == rnd)).any()
+    ]
+    live = sorted(set(ep_next_at(store, deadlines)["deadline_at"]))
+    if not live:
+        typer.echo("no gameweek of this season has a capture before its deadline and results")
+        return
+    pred = run(lake, store, simulator(lake, store, live, n_sims), live)
+    _, summary = compare_ep_next(pred, store)
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        typer.echo(summary.round(4).to_string(index=False))
+
+
 @evaluate_app.command("phase2")
 def evaluate_phase2_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
