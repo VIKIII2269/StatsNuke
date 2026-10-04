@@ -749,6 +749,28 @@ def evaluate_replay_cmd(
                 typer.echo(frame.round(3).to_string())
     typer.echo(f"horizon forecasts vs repeat: {report.horizon_value}")
     typer.echo(f"exit gate: {'PASS' if report.passed else 'FAIL'}")
+    if not report.v2_gate.empty:
+        with pd.option_context("display.width", 250, "display.max_columns", 30):
+            typer.echo(report.v2_gate.round(3).to_string())
+        typer.echo(f"v2 exit gate: {'PASS' if report.v2_passed else 'FAIL'}")
+
+
+@evaluate_app.command("v2")
+def evaluate_v2_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Gate seasons, e.g. 2022-23.")],
+    train_from: Annotated[
+        list[str], typer.Option("--train-from", help="Earlier seasons the stack learns from.")
+    ],
+) -> None:
+    """Model v2 (news-aware simulator, stacked) against v1 and the benchmarks."""
+    import pandas as pd
+
+    from fplh.evaluate.v2 import evaluate_v2
+
+    res = evaluate_v2(Lake(get_settings().lake_uri), season, train_from)
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        for frame in (res.summary, res.gate, res.per_season):
+            typer.echo(frame.round(4).to_string(index=False))
 
 
 @evaluate_app.command("ledger")

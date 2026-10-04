@@ -114,19 +114,23 @@ def walk_forward_stack(
     outcomes: pd.DataFrame,
     deadlines: Sequence[pd.Timestamp],
     config: StackConfig | None = None,
+    targets: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Stacked expected points for the rows at each of ``deadlines``.
 
+    Trains on ``frame``; predicts the rows of ``targets`` (default ``frame``), e.g. a
+    horizon-5 frame stacked by trees trained on horizon-1 forecasts.
     ``outcomes``: player_uid, fixture_uid, total_points, observed_at."""
     cfg = config or StackConfig()
     y = outcomes[["player_uid", "fixture_uid", "total_points", "observed_at"]].rename(
         columns={"observed_at": "y_at"}
     )
     f = frame.merge(y, on=["player_uid", "fixture_uid"], how="left")
+    rows = f if targets is None else targets
     out = []
     booster: xgb.Booster | None = None
     for i, d in enumerate(sorted(deadlines)):
-        now = f[f["deadline_at"] == d]
+        now = rows[rows["deadline_at"] == d]
         if now.empty:
             continue
         if booster is None or i % cfg.refit_every == 0:

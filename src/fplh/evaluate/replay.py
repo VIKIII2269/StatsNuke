@@ -324,7 +324,36 @@ def strategy_forecasts(lake: Lake, seasons: list[str]) -> dict[str, tuple[pd.Dat
         "a0 (repeat)": (a0, "repeat"),
         "last5 (repeat)": (run(lake, store, NaiveLast5(), ds), "repeat"),
     }
+    preds[V2_STRATEGY] = (v2_forecasts(lake, store, seasons, ds), "native")
     return {k: (v[KEEP].dropna(subset=["expected_points"]), m) for k, (v, m) in preds.items()}
+
+
+V2_STRATEGY = "v2 (stacked, horizon 5)"
+V2_TRAIN_FROM = ("2017-18", "2018-19", "2019-20", "2020-21", "2021-22")
+
+
+def v2_forecasts(
+    lake: Lake, store: SilverStore, seasons: list[str], deadlines: list[pd.Timestamp]
+) -> pd.DataFrame:
+    """Model v2 at horizon 5: the news-aware simulator's horizon-5 forecasts with the
+    replica's next-week forecast repeated, stacked by trees trained walk-forward on the
+    horizon-1 forecasts of every earlier season (``models.stack``)."""
+    from fplh.evaluate.phase3 import run, simulator
+    from fplh.evaluate.v2 import season_runs
+    from fplh.models.stack import repeat_forecasts, stack_frame, walk_forward_stack
+
+    h1 = season_runs(lake, store, [*V2_TRAIN_FROM, *seasons])
+    sim5 = run(
+        lake, store, simulator(lake, store, deadlines, 1000, 5, minutes="news"), deadlines, 5
+    )
+    pm = store.get("fact_player_match")
+    crowd = store.get("fpl_round_transfers")
+    prices = pm[["player_uid", "value", "observed_at"]]
+    train = stack_frame(h1["sim_news"], h1["replica"], crowd, prices)
+    targets = stack_frame(sim5, repeat_forecasts(h1["replica"], sim5), crowd, prices)
+    y = pm[["player_uid", "fixture_uid", "total_points", "observed_at"]]
+    out: pd.DataFrame = walk_forward_stack(train, y, deadlines, targets=targets)
+    return out
 
 
 def _job(args: tuple[str, str, str, pd.DataFrame, Mode, dict[str, float]]) -> pd.DataFrame:
@@ -345,6 +374,8 @@ class ReplayReport:
     sensitivity: pd.DataFrame
     passed: bool
     logs: pd.DataFrame
+    v2_gate: pd.DataFrame = field(default_factory=pd.DataFrame)
+    v2_passed: bool = False
 
 
 def evaluate_replay(
@@ -376,20 +407,14 @@ def evaluate_replay(
     totals = season_totals(main)
     total_of = {str(k): float(v) for k, v in totals["total"].items()}
     strongest = max(BASELINES, key=lambda b: total_of[b])
-    gate_rows = []
-    for b in BASELINES:
-        c = compare_strategies(main, GATE_STRATEGY, b)
-        per_season = {
-            s: float(
-                main[(main["strategy"] == GATE_STRATEGY) & (main["season"] == s)]["points"].sum()
-                - main[(main["strategy"] == b) & (main["season"] == s)]["points"].sum()
-            )
-            for s in seasons
-        }
-        gate_rows.append({"baseline": b, **c, **{f"diff {s}": v for s, v in per_season.items()}})
-    gate = pd.DataFrame(gate_rows)
+    gate = _gate(main, GATE_STRATEGY, BASELINES, seasons)
     strongest_row = gate[gate["baseline"] == strongest].iloc[0]
     passed = bool(strongest_row["ci_low"] > 0)
+    v2_gate = (
+        _gate(main, V2_STRATEGY, (*BASELINES, GATE_STRATEGY), seasons)
+        if V2_STRATEGY in total_of
+        else pd.DataFrame()
+    )
     sens = (
         season_totals(logs[logs["strategy"].str.startswith(GATE_STRATEGY)])
         if sensitivity
@@ -403,7 +428,28 @@ def evaluate_replay(
         sens,
         passed,
         logs,
+        v2_gate,
+        bool(v2_gate[v2_gate["baseline"] == strongest]["ci_low"].iloc[0] > 0)
+        if not v2_gate.empty
+        else False,
     )
+
+
+def _gate(
+    main: pd.DataFrame, strategy: str, baselines: tuple[str, ...], seasons: list[str]
+) -> pd.DataFrame:
+    rows = []
+    for b in baselines:
+        c = compare_strategies(main, strategy, b)
+        per_season = {
+            s: float(
+                main[(main["strategy"] == strategy) & (main["season"] == s)]["points"].sum()
+                - main[(main["strategy"] == b) & (main["season"] == s)]["points"].sum()
+            )
+            for s in seasons
+        }
+        rows.append({"baseline": b, **c, **{f"diff {s}": v for s, v in per_season.items()}})
+    return pd.DataFrame(rows)
 
 
 def versus_average(log: pd.DataFrame, events: pd.DataFrame, season: str) -> pd.DataFrame:
