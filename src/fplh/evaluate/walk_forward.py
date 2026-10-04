@@ -130,8 +130,11 @@ def cached_walk_forward(
 ) -> WalkForwardResult:
     """Reuse a stored run with the same predictor name and version, deadlines, horizon,
     data and configuration, else run and store it. The git SHA is ignored: a predictor's
-    ``version`` is what identifies its behaviour, so bump it when the code changes."""
-    data_hash, _ = data_sha256(lake)
+    ``version`` is what identifies its behaviour, so bump it when the code changes.
+    In-memory stores cannot be content-hashed and are never reused."""
+    if store.lake is None:
+        return run_walk_forward(store, predictor, deadlines, unit=unit, horizon=horizon, lake=lake)
+    data_hash, _ = data_sha256(store.lake)
     config = config_sha256()
     wanted = [d.isoformat() for d in sorted(deadlines)]
     for key in lake.list("gold/pred_run/"):
