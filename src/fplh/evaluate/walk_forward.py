@@ -17,7 +17,7 @@ import pandas as pd
 from fplh.evaluate.manifest import Manifest, config_sha256, data_sha256, git_sha
 from fplh.features.information_set import InformationSet, LeakageError, SilverStore
 from fplh.features.spine import SPINE_KEYS, build_spine, target_fixtures
-from fplh.lake.parquet import to_parquet_bytes, write_parquet
+from fplh.lake.parquet import read_parquet, to_parquet_bytes, write_parquet
 from fplh.lake.storage import Lake
 
 FIXTURE_KEYS = ["fixture_uid", "deadline_at", "horizon"]
@@ -117,3 +117,37 @@ def run_walk_forward(
 def output_digest(result: WalkForwardResult) -> str:
     keys = FIXTURE_KEYS if result.manifest.extra.get("unit") == "fixture" else SPINE_KEYS
     return hashlib.sha256(to_parquet_bytes(result.predictions, keys)).hexdigest()
+
+
+def cached_walk_forward(
+    store: SilverStore,
+    predictor: Predictor | FixturePredictor,
+    deadlines: Sequence[pd.Timestamp],
+    *,
+    lake: Lake,
+    unit: Literal["player", "fixture"] = "player",
+    horizon: int = 1,
+) -> WalkForwardResult:
+    """Reuse a stored run with the same predictor name and version, deadlines, horizon,
+    data and configuration, else run and store it. The git SHA is ignored: a predictor's
+    ``version`` is what identifies its behaviour, so bump it when the code changes."""
+    data_hash, _ = data_sha256(lake)
+    config = config_sha256()
+    wanted = [d.isoformat() for d in sorted(deadlines)]
+    for key in lake.list("gold/pred_run/"):
+        if not key.endswith("manifest.json"):
+            continue
+        m = Manifest.from_json(lake.get_bytes(key).decode())
+        if (
+            m.predictor == predictor.name
+            and m.predictor_version == predictor.version
+            and m.deadlines == wanted
+            and m.horizon == horizon
+            and m.extra.get("unit") == unit
+            and m.data_manifest_sha256 == data_hash
+            and m.config_sha256 == config
+        ):
+            part = f"gold/pred_{unit}/run_id={m.run_id}/part-000.parquet"
+            if lake.exists(part):
+                return WalkForwardResult(m, read_parquet(lake, part), [])
+    return run_walk_forward(store, predictor, deadlines, unit=unit, horizon=horizon, lake=lake)
