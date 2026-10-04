@@ -282,7 +282,7 @@ def simulate_fixture(
     # the player is drawn ∝ yellow rate (M9) when given
     outfield = [
         (side.position != "GK")[None, :]
-        * (side.yellow_rate if side.yellow_rate is not None else np.ones(len(side)))[None, :]
+        * (side.yellow_rate + 1e-6 if side.yellow_rate is not None else np.ones(len(side)))[None, :]
         for side in fx.sides
     ]
     for k in (0, 1):
