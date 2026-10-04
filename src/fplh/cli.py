@@ -755,13 +755,21 @@ def evaluate_replay_cmd(
 def evaluate_ledger_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
     min_ev: Annotated[float, typer.Option(help="Paper-bet EV threshold.")] = 0.03,
+    strategy: Annotated[
+        str, typer.Option(help="model | consensus (sharp vs soft books) | hybrid")
+    ] = "model",
+    model_weight: Annotated[float, typer.Option(help="Model share in hybrid.")] = 0.25,
 ) -> None:
     """Paper-only market ledger: EV, fractional Kelly, CLV (no bets are ever placed)."""
     from fplh.delivery.ledger import LedgerConfig, run_ledger
     from fplh.models.market import load_devig_method
 
+    if strategy not in ("model", "consensus", "hybrid"):
+        raise typer.BadParameter("strategy must be model, consensus or hybrid")
     cfg = LedgerConfig(min_ev=min_ev, devig_method=load_devig_method())
-    book, bets, summary = run_ledger(Lake(get_settings().lake_uri), season, cfg)
+    book, bets, summary = run_ledger(
+        Lake(get_settings().lake_uri), season, cfg, strategy=strategy, model_weight=model_weight
+    )
     all_clv = book["clv"].dropna()
     typer.echo(f"priced outcomes: {len(book)}, mean CLV (all) {all_clv.mean():.4f}")
     if not bets.empty:
