@@ -662,6 +662,29 @@ def evaluate_phase3_benchmarks(
         typer.echo(result.comparisons.to_string(index=False))
 
 
+@evaluate_app.command("phase3")
+def evaluate_phase3_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    n_sims: Annotated[int, typer.Option(help="Simulations per fixture.")] = 2000,
+    ablations: Annotated[bool, typer.Option(help="Run the A4/A5 ablations.")] = True,
+) -> None:
+    """Phase 3 exit gate: the player simulator against the OpenFPL re-implementation and
+    the naive floors, walk-forward (MSE, block bootstrap + DM, guardrails, ablations)."""
+    import pandas as pd
+
+    from fplh.evaluate.phase3 import evaluate_phase3
+
+    result = evaluate_phase3(
+        Lake(get_settings().lake_uri), season, n_sims=n_sims, ablations=ablations
+    )
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        for frame in (result.summary, result.gate, result.per_season, result.ablations):
+            typer.echo(frame.round(4).to_string(index=False))
+    for k, v in result.guardrails.items():
+        typer.echo(f"{k}: {v:.4f}")
+    typer.echo(f"exit gate: {'PASS' if result.passed else 'FAIL'}")
+
+
 @evaluate_app.command("phase2")
 def evaluate_phase2_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
