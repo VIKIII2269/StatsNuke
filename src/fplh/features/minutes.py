@@ -9,7 +9,10 @@ deadline:
   for the fixture, and the player's rank among them;
 * rest days before the fixture and days since the player's last appearance;
 * position, price and the latest snapshot ``chance_of_playing_next_round`` (missing,
-  never imputed, before our own captures began: gap 1).
+  never imputed, before our own captures began: gap 1);
+* FPL transfer activity at the latest deadline ≤ D (``features.transfers``): the share
+  of owners selling, the buy ratio, ownership, the age of that round in days, and the
+  start share of team-mates at the position weighted by their owners' selling.
 
 ``started`` labels come from Understat rosters (2014/15+, every FPL appearance is
 linked); FPL's own ``starts`` exists only from 2022/23 and agrees wherever it is set.
@@ -23,6 +26,7 @@ import pandas as pd
 from fplh.features.information_set import InformationSet
 from fplh.features.spine import asof_join
 from fplh.features.trailing import trailing_means
+from fplh.features.transfers import COLUMNS as TRANSFER_COLUMNS
 
 WINDOWS = (1, 3, 5, 10)
 POSITIONS = ("GK", "DEF", "MID", "FWD")
@@ -72,8 +76,11 @@ def _rest_days(info: InformationSet, rows: pd.DataFrame) -> pd.Series:
     return out
 
 
-def minutes_features(info: InformationSet, rows: pd.DataFrame) -> pd.DataFrame:
-    """``rows``: player_uid, fixture_uid, team, position, kickoff_at, deadline_at."""
+def minutes_features(
+    info: InformationSet, rows: pd.DataFrame, *, news: bool = False
+) -> pd.DataFrame:
+    """``rows``: player_uid, fixture_uid, team, position, kickoff_at, deadline_at.
+    ``news`` adds the transfer-activity features (model v2)."""
     hist = player_history(info)
     parts = [
         trailing_means(
@@ -115,6 +122,24 @@ def minutes_features(info: InformationSet, rows: pd.DataFrame) -> pd.DataFrame:
         out["chance_of_playing"] = j["chance_of_playing_next_round"].to_numpy(dtype=float)
     else:
         out["chance_of_playing"] = np.nan
+    tr = info.table("fpl_round_transfers") if news else pd.DataFrame()
+    if not tr.empty:
+        j = asof_join(
+            rows[["player_uid", "deadline_at"]].reset_index(drop=True),
+            tr.assign(tr_at=tr["observed_at"]),
+            ["player_uid"],
+            [*TRANSFER_COLUMNS, "tr_at"],
+        )
+        for c in TRANSFER_COLUMNS:
+            out[c] = j[c].to_numpy(dtype=float)
+        age = _days(rows["deadline_at"]).to_numpy() - _days(j["tr_at"]).to_numpy()
+        out["tr_age"] = np.clip(age, 0, 60)
+        # team-mates at the position being sold: starts likely to free up for this player
+        lost = (rate * out["tr_sell"].fillna(0.0)).groupby(grp).transform("sum")
+        out["depth_news"] = lost - rate * out["tr_sell"].fillna(0.0)
+    elif news:
+        for c in (*TRANSFER_COLUMNS, "tr_age", "depth_news"):
+            out[c] = np.nan
     for p in POSITIONS:
         out[f"pos_{p}"] = (rows["position"] == p).astype(float)
     return out

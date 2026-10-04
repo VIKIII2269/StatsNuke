@@ -81,6 +81,10 @@ def make(seed: int = 0) -> dict[str, pd.DataFrame]:
                     "tackles": int(rng.poisson(2)),
                     "recoveries": int(rng.poisson(5)),
                     "total_points": 2,
+                    "transfers_in": int(rng.integers(0, 5000)) * (f["round"] > 1),
+                    "transfers_out": int(rng.integers(0, 5000)) * (f["round"] > 1),
+                    "selected": int(rng.integers(5000, 50000)),
+                    "round": f["round"],
                     "event_at": f["kickoff_at"],
                     "observed_at": f["kickoff_at"] + LAG,
                 }
@@ -102,6 +106,9 @@ def make(seed: int = 0) -> dict[str, pd.DataFrame]:
                     "now_cost": 50,
                     "selected_by_percent": 5.0,
                     "ep_next": float(rng.uniform(0, 8)),
+                    "transfers_in_event": int(rng.integers(0, 5000)),
+                    "transfers_out_event": int(rng.integers(0, 5000)),
+                    "total_players": 100_000,
                     "observed_at": obs,
                 }
             )

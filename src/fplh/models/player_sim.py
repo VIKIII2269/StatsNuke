@@ -16,7 +16,8 @@ At each deadline D, for every fixture of the next round:
    probabilities.
 
 Ablations (ARCHITECTURE.md §11.6): ``minutes="naive"`` replaces M4 with the shares of the
-last three matches (A4); ``attack="raw"`` replaces the shrunk goal rates with the raw
+last three matches (A4); ``minutes="news"`` adds FPL transfer activity to M4 (model v2);
+``attack="raw"`` replaces the shrunk goal rates with the raw
 decayed per-90 rates (A5).
 """
 
@@ -141,7 +142,7 @@ class PlayerSimulator:
     params: GoalProcessParams
     m1_params: TeamStrengthParams
     n_sims: int = 2000
-    minutes: Literal["model", "naive"] = "model"
+    minutes: Literal["model", "naive", "news"] = "model"
     attack: Literal["shrunk", "raw"] = "shrunk"
     refit_every: int = 4
     seed: int = 0
@@ -154,7 +155,7 @@ class PlayerSimulator:
         if self.minutes == "naive":
             return naive_minutes(minutes_features(info, spine))
         if self._minutes_model is None or self._calls % self.refit_every == 0:
-            self._minutes_model = MinutesModel.fit(info)
+            self._minutes_model = MinutesModel.fit(info, news=self.minutes == "news")
         return self._minutes_model.predict(info, spine)
 
     def _goal_rates(self, attack: AttackRates, spine: pd.DataFrame) -> pd.DataFrame:

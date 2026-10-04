@@ -53,6 +53,7 @@ PARAMS: dict[str, Any] = {
     "nthread": 4,
 }
 ROUNDS = 250
+NEWS_VERSION = "2"  # bump when the news features change
 STAGES = ("start", "full", "sub")
 MONOTONE_UP = {"h_started_1", "h_started_3", "h_started_5", "h_started_10", "chance_of_playing"}
 
@@ -133,11 +134,12 @@ def subs_used_per_side(info: InformationSet) -> dict[int, float]:
 class MinutesModel:
     stages: dict[str, _Stage] = field(default_factory=dict)
     sub_shift: dict[int, float] = field(default_factory=dict)  # logit shift of π^B by limit
+    news: bool = False  # transfer-activity features (model v2)
 
     @classmethod
-    def fit(cls, info: InformationSet, rounds: int = ROUNDS) -> MinutesModel:
+    def fit(cls, info: InformationSet, rounds: int = ROUNDS, *, news: bool = False) -> MinutesModel:
         rows = labelled_rows(info)
-        x = minutes_features(info, rows)
+        x = minutes_features(info, rows, news=news)
         started = rows["y_start"].to_numpy() > 0
         stages = {
             "start": fit_stage(x, rows["y_start"].to_numpy(), rounds),
@@ -151,11 +153,11 @@ class MinutesModel:
             int(lim): _logit_shift(p_bench[limit == lim], float(y_bench[limit == lim].mean()))
             for lim in np.unique(limit)
         }
-        return cls(stages, shift)
+        return cls(stages, shift, news)
 
     def predict(self, info: InformationSet, rows: pd.DataFrame) -> pd.DataFrame:
         """``rows``: player_uid, fixture_uid, team, position, kickoff_at, deadline_at."""
-        x = minutes_features(info, rows)
+        x = minutes_features(info, rows, news=self.news)
         p = pd.DataFrame({f"p_{s}": self.stages[s].predict(x) for s in STAGES}, index=rows.index)
         if self.sub_shift:
             fallback = self.sub_shift[max(self.sub_shift)]  # an unseen limit: the largest known
@@ -189,14 +191,19 @@ class MinutesPredictor:
 
     refit_every: int = 4
     rounds: int = ROUNDS
+    news: bool = False
     name: str = "minutes"
     version: str = "4"
     _model: MinutesModel | None = field(default=None, repr=False)
     _calls: int = field(default=0, repr=False)
 
+    def __post_init__(self) -> None:
+        if self.news and self.name == "minutes":
+            self.name, self.version = "minutes_news", NEWS_VERSION
+
     def predict(self, info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
         if self._model is None or self._calls % self.refit_every == 0:
-            self._model = MinutesModel.fit(info, self.rounds)
+            self._model = MinutesModel.fit(info, self.rounds, news=self.news)
         self._calls += 1
         p = self._model.predict(info, spine)
         out = spine[[*SPINE_KEYS, "position"]].copy()

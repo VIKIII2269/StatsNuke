@@ -2,6 +2,8 @@
 
 1. ``max_observed_at <= D`` for every builder at every deadline;
 2. future-shuffle: perturbing every row observed after D leaves features unchanged.
+   Columns public before their row is observed (``transfers.PRE_DEADLINE``) are perturbed
+   when they became public instead.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import pandas as pd
 from fplh.features.builders import BUILDERS, FeatureBuilder
 from fplh.features.information_set import TIME_INDEXED, InformationSet, SilverStore
 from fplh.features.spine import SPINE_KEYS, build_spine
+from fplh.features.transfers import PRE_DEADLINE, available_at
 
 
 def perturb_future(
@@ -29,8 +32,17 @@ def perturb_future(
             continue
         df = df.copy()
         future = df["observed_at"] > deadline
+        early = PRE_DEADLINE.get(name, ())
+        if early and "dim_fixture" in frames:
+            public_later = available_at(df, frames["dim_fixture"]) > deadline
+            for col in early:
+                if col in df and public_later.any():
+                    s = df.loc[public_later, col]
+                    df.loc[public_later, col] = rng.permutation(s.to_numpy()) + 1
         if future.any():
             for col in df.columns:
+                if col in early:
+                    continue  # perturbed above, by when it became public
                 if (
                     col in ("observed_at", "event_at", "season")
                     or col.endswith("_uid")
