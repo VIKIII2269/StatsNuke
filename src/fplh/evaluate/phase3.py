@@ -74,9 +74,16 @@ def simulator_params() -> GoalProcessParams:
     return GoalProcessParams.from_dict(doc["levels"][doc["simulator_level"]])
 
 
-def team_rates(lake: Lake, store: SilverStore, deadlines: list[pd.Timestamp]) -> pd.DataFrame:
+def team_rates(
+    lake: Lake, store: SilverStore, deadlines: list[pd.Timestamp], horizon: int = 1
+) -> pd.DataFrame:
     run = cached_walk_forward(
-        store, FusedRates(store, min(deadlines)), deadlines, lake=lake, unit="fixture"
+        store,
+        FusedRates(store, min(deadlines)),
+        deadlines,
+        lake=lake,
+        unit="fixture",
+        horizon=horizon,
     )
     p = run.predictions
     out: pd.DataFrame = p[["fixture_uid", "deadline_at"]].assign(
@@ -90,13 +97,20 @@ def simulator(
     store: SilverStore,
     deadlines: list[pd.Timestamp],
     n_sims: int = 2000,
+    horizon: int = 1,
     **variant: str,
 ) -> PlayerSimulator:
+    """The simulator over the fused rates. Runs are cached by name, so the name carries any
+    ablation, a horizon beyond 1 and a non-default number of simulations."""
     params = simulator_params()
     emu = emulator_for(lake, params, grid=20, n_sims=100_000)
     suffix = "".join(f"_{k}-{v}" for k, v in sorted(variant.items()))
+    if horizon != 1:
+        suffix += f"_h{horizon}"
+    if n_sims != 2000:
+        suffix += f"_n{n_sims}"
     return PlayerSimulator(
-        team_rates(lake, store, deadlines),
+        team_rates(lake, store, deadlines, horizon),
         emu,
         params,
         load_m1_params(),
@@ -107,10 +121,20 @@ def simulator(
 
 
 def run(
-    lake: Lake, store: SilverStore, predictor: object, deadlines: list[pd.Timestamp]
+    lake: Lake,
+    store: SilverStore,
+    predictor: object,
+    deadlines: list[pd.Timestamp],
+    horizon: int = 1,
 ) -> pd.DataFrame:
     """One cached walk-forward over all deadlines (stateful refit cadences stay intact)."""
-    return cached_walk_forward(store, predictor, deadlines, lake=lake).predictions  # type: ignore[arg-type]
+    return cached_walk_forward(
+        store,
+        predictor,  # type: ignore[arg-type]
+        deadlines,
+        lake=lake,
+        horizon=horizon,
+    ).predictions
 
 
 def crps_rows(pred: pd.DataFrame, actual: pd.Series) -> np.ndarray:
@@ -156,7 +180,7 @@ def evaluate_phase3(
     variants = {"A4 naive minutes": {"minutes": "naive"}, "A5 raw goal rates": {"attack": "raw"}}
     if ablations:
         for label, v in variants.items():
-            ab = simulator(lake, store, all_deadlines, n_sims, **v)
+            ab = simulator(lake, store, all_deadlines, n_sims, 1, **v)
             preds[label] = run(lake, store, ab, all_deadlines)
 
     actual = outcomes(store)

@@ -3,8 +3,8 @@
 # Scoring verified by `fplh golden check-silver --season 2021-22` against every official
 # total_points row of the season (see docs/IMPLEMENTATION_PLAN.md). goal.GK = 6 is
 # identified by data (Alisson, 2020/21). No defensive-contribution points before 2025/26.
-# The `game` block (chips, transfer banking) is approximate for this season and must be
-# verified before Phase 4 season replays use it.
+# The `game` block is approximate for this season (see the chip comments); Phase 4 replays
+# use 2022/23 onwards only.
 season: "2021/22"
 appearance:        {lt_60: 1, gte_60: 2}
 goal:              {GK: 6, DEF: 6, MID: 5, FWD: 4}
@@ -44,5 +44,11 @@ game:
   free_transfer_bank_max: 2
   hit_cost: 4
   free_transfers_preserved_on: []
-  chips: {sets: 2, per_set: [wildcard, free_hit, triple_captain, bench_boost], first_set_deadline_gw: 19}
+  chips:
+    # one copy per window (inclusive gameweeks); approximate: first-wildcard cut-off not verified
+    windows:
+      wildcard: [[2, 19], [20, 38]]
+      free_hit: [[2, 38]]
+      triple_captain: [[1, 38]]
+      bench_boost: [[1, 38]]
   lockdown: "D+1 09:00 Europe/London"

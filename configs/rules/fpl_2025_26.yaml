@@ -44,5 +44,6 @@ game:
   free_transfer_bank_max: 5
   hit_cost: 4
   free_transfers_preserved_on: [wildcard, free_hit]
-  chips: {sets: 2, per_set: [wildcard, free_hit, triple_captain, bench_boost], first_set_deadline_gw: 19}
+  chips: {sets: 2, per_set: [wildcard, free_hit, triple_captain, bench_boost], first_set_deadline_gw: 19}   # two sets; the first by the GW19 deadline
+  special_free_transfers: {16: 5}    # AFCON: free transfers topped up to five in GW16
   lockdown: "D+1 09:00 Europe/London"

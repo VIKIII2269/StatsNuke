@@ -97,9 +97,44 @@ class Bps(_Strict):
 
 
 class Chips(_Strict):
-    sets: int = Field(ge=1)
-    per_set: list[Chip]
-    first_set_deadline_gw: int
+    """A season's chips, in one of two forms:
+
+    * ``sets`` copies of the ``per_set`` chips; the first set is playable through gameweek
+      ``first_set_deadline_gw`` (inclusive), the second after it (2025/26 on);
+    * ``windows``: per chip, one inclusive gameweek range per copy (e.g. two wildcards, one
+      per half, and one free hit for the season, as before 2025/26).
+    """
+
+    sets: int | None = Field(default=None, ge=1)
+    per_set: list[Chip] | None = None
+    first_set_deadline_gw: int | None = None
+    windows: dict[Chip, list[tuple[int, int]]] | None = None
+
+    @model_validator(mode="after")
+    def _one_form(self) -> Chips:
+        by_sets = self.sets is not None and self.per_set is not None
+        if by_sets == (self.windows is not None):
+            raise ValueError("give either sets/per_set/first_set_deadline_gw or windows")
+        if self.sets is not None and self.sets > 1 and self.first_set_deadline_gw is None:
+            raise ValueError("two or more sets need first_set_deadline_gw")
+        for chip, ranges in (self.windows or {}).items():
+            for lo, hi in ranges:
+                if not 1 <= lo <= hi <= 38:
+                    raise ValueError(f"{chip}: bad gameweek window ({lo}, {hi})")
+        return self
+
+    def allowance(self, last_gw: int = 38) -> dict[str, list[tuple[int, int]]]:
+        """Per chip, the inclusive gameweek window of each copy."""
+        if self.windows is not None:
+            return {str(c): [(int(a), int(b)) for a, b in w] for c, w in self.windows.items()}
+        assert self.sets is not None
+        assert self.per_set is not None
+        if self.sets == 1:
+            spans = [(1, last_gw)]
+        else:
+            d = int(self.first_set_deadline_gw or last_gw // 2)
+            spans = [(1, d), (d + 1, last_gw)]
+        return {str(c): list(spans) for c in self.per_set}
 
 
 class Game(_Strict):
@@ -111,6 +146,9 @@ class Game(_Strict):
     free_transfers_preserved_on: list[Chip]
     chips: Chips
     lockdown: str
+    # gameweek → free transfers available that week regardless of the bank (top-ups such as
+    # the 2022/23 World Cup break, unlimited ≈ 15, or 2025/26's AFCON top-up to 5)
+    special_free_transfers: dict[int, int] = Field(default_factory=dict)
 
 
 class Rules(_Strict):
