@@ -613,7 +613,25 @@ CRPS of the points pmf is 0.627.
 - **A5 raw goal rates** (no shrinkage): −0.016 [−0.023, −0.008].
 - **A7 and A8 are not run.** A7 needs a substitution hazard, and the simulator draws exits from the empirical timing instead. A8 needs epistemic posterior draws, which are not built. Both move to Phase 5.
 
-**Attribution** (`fplh evaluate attribution`, every second deadline, 1,000 simulations): ATTRIBUTION_PLACEHOLDER
+**Attribution** (`fplh evaluate attribution`, every second deadline, 1,000 simulations): the error y − ŷ⁰ splits exactly into three parts:
+- **minutes** (ŷ¹ − ŷ⁰): the actual minutes imposed;
+- **goal events** (ŷ² − ŷ¹): actual goals, assists, own goals, conceded and missed penalties also imposed;
+- **the rest** (y − ŷ²): saves, cards, defensive actions, bonus and sampling.
+
+The table gives the MSE of each forecast on 39,330 player-fixtures:
+
+| Position | n | Forecast ŷ⁰ | Actual minutes ŷ¹ | Plus actual goal events ŷ² | Mean abs. minutes part | Mean abs. goal-events part | Mean abs. rest |
+|---|---|---|---|---|---|---|---|
+| All | 39,330 | 3.561 | 2.749 | 0.156 | 0.548 | 0.705 | 0.143 |
+| GK | 4,282 | 2.334 | 1.856 | 0.449 | 0.225 | 0.492 | 0.224 |
+| DEF | 13,174 | 3.398 | 2.618 | 0.130 | 0.576 | 0.758 | 0.141 |
+| MID | 17,181 | 3.700 | 2.843 | 0.109 | 0.596 | 0.692 | 0.127 |
+| FWD | 4,693 | 4.628 | 3.586 | 0.132 | 0.587 | 0.798 | 0.127 |
+
+How the error divides:
+- **Minutes, about 23 %.** Knowing who plays and for how long removes 0.81 of the 3.56. This part is partly reducible with team news (gap 1, the captured chance of playing).
+- **Goal events, about 73 %.** Knowing the goals, assists and goals conceded removes most of the rest. This is mostly the irreducible luck of scoring, which better attack inputs (player-prop odds) can narrow only at the margin.
+- **The rest, about 4 %.** Saves, cards, bonus and defensive actions. It is largest for goalkeepers (0.45: saves and bonus).
 
 **`ep_next`** (`fplh evaluate ep-next --season 2026-27`):
 - The bootstrap captures run every 3 hours from 30 September 2026 on the `Collect` workflow (`data-bronze` branch until a bucket is configured).
