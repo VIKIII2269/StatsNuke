@@ -342,7 +342,7 @@ def v2_forecasts(
     from fplh.evaluate.v2 import season_runs
     from fplh.models.stack import repeat_forecasts, stack_frame, walk_forward_stack
 
-    h1 = season_runs(lake, store, [*V2_TRAIN_FROM, *seasons])
+    h1 = season_runs(lake, store, [[s] for s in V2_TRAIN_FROM] + [seasons], with_v1=False)
     sim5 = run(
         lake, store, simulator(lake, store, deadlines, 1000, 5, minutes="news"), deadlines, 5
     )

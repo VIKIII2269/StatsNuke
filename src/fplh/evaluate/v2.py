@@ -35,17 +35,22 @@ class V2Result:
 
 
 def season_runs(
-    lake: Lake, store: SilverStore, seasons: list[str], horizon: int = 1
+    lake: Lake,
+    store: SilverStore,
+    groups: list[list[str]],
+    with_v1: bool = True,
 ) -> dict[str, pd.DataFrame]:
-    """Cached walk-forward runs per season (one run per season keeps each cacheable)."""
+    """Cached walk-forward runs, one run per group of seasons (the Phase 3 gate's three
+    seasons are one cached run; earlier seasons one each)."""
     dim = store.get("dim_fixture")
     out: dict[str, list[pd.DataFrame]] = {"sim_v1": [], "sim_news": [], "replica": []}
-    for s in seasons:
-        ds = list(historical_deadlines(dim, s)["deadline_at"])
+    for group in groups:
+        ds = [d for s in group for d in historical_deadlines(dim, s)["deadline_at"]]
         out["replica"].append(run(lake, store, OpenFPLReplica(), ds))
-        out["sim_v1"].append(run(lake, store, simulator(lake, store, ds), ds))
+        if with_v1:
+            out["sim_v1"].append(run(lake, store, simulator(lake, store, ds), ds))
         out["sim_news"].append(run(lake, store, simulator(lake, store, ds, minutes="news"), ds))
-    return {k: pd.concat(v, ignore_index=True) for k, v in out.items()}
+    return {k: pd.concat(v, ignore_index=True) for k, v in out.items() if v}
 
 
 def stacked(
@@ -71,8 +76,13 @@ def evaluate_v2(
 ) -> V2Result:
     store = SilverStore(lake)
     dim = store.get("dim_fixture")
-    runs = season_runs(lake, store, [*train_from, *seasons])
     ds = [d for s in seasons for d in historical_deadlines(dim, s)["deadline_at"]]
+    gate_runs = season_runs(lake, store, [seasons])
+    train = season_runs(lake, store, [[s] for s in train_from], with_v1=False)
+    runs = {
+        k: pd.concat([train[k], v], ignore_index=True) if k in train else v
+        for k, v in gate_runs.items()
+    }
     preds = {
         V2: stacked(store, runs["sim_news"], runs["replica"], ds, config),
         "simulator v1": runs["sim_v1"],
