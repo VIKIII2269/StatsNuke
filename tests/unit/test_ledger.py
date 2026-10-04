@@ -7,8 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from fplh.delivery.ledger import LedgerConfig, ledger, paper_bets, summarise
+from fplh.delivery.ledger import LedgerConfig, fair_closing, ledger, paper_bets, summarise
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 T0 = pd.Timestamp("2024-08-16 18:00", tz="UTC")
@@ -70,6 +71,18 @@ def test_ev_and_clv_use_prices_available_at_the_deadline() -> None:
     fair = (1 / 2.2) / (1 / 2.2 + 1 / 3.3 + 1 / 3.4)  # multiplicative de-vig of the close
     assert np.isclose(home["clv"], 2.5 * fair - 1)
     assert set(book["outcome"]) == {"home", "draw", "away", "over", "under"}
+
+
+@pytest.mark.parametrize("method", ["multiplicative", "power", "shin"])
+def test_closing_prices_are_devigged_one_market_at_a_time(method: str) -> None:
+    _, odds, _ = frames()
+    fair = fair_closing(odds, method)
+    assert len(fair) == 2
+    sums = fair[["fair_home", "fair_draw", "fair_away"]].sum(axis=1)
+    assert np.allclose(sums, 1.0)
+    assert np.allclose(fair[["fair_over", "fair_under"]].sum(axis=1), 1.0)
+    one = fair_closing(odds[odds["fixture_uid"] == "s:a:b"], method)
+    assert np.allclose(one.loc["s:a:b"], fair.loc["s:a:b"])  # independent of other rows
 
 
 def test_fractional_kelly_paper_stakes_and_settlement() -> None:

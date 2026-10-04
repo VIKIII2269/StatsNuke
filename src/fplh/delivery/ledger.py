@@ -66,8 +66,10 @@ def fair_closing(odds: pd.DataFrame, method: str) -> pd.DataFrame:
             continue
         ok = close[cols].notna().all(axis=1)
         fair = np.full((len(close), len(outs)), np.nan)
-        if ok.any():
-            fair[ok.to_numpy()] = devig(close.loc[ok, cols].to_numpy(float), method)
+        rows = np.flatnonzero(ok.to_numpy())
+        prices = close[cols].to_numpy(float)
+        for r in rows:  # one market at a time: power and Shin de-vig a single market
+            fair[r] = devig(prices[r], method)
         for j, c in enumerate(outs):
             out[f"fair_{c}"] = fair[:, j]
     return out
