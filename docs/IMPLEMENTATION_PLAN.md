@@ -291,11 +291,11 @@ Decisions:
 | 3.0b | Benchmarks: OpenFPL re-implementation (`features/openfpl.py`, `models/openfpl.py`), last-5 floor, player scoring (`evaluate/player_level.py`), `fplh evaluate phase3-benchmarks` | **Built** (§4.2) |
 | 3.1 | `models/goal_process.py` (G4–G6): piecewise-exponential Poisson GLM, hierarchical state effects, red-card hazard, frailty, stoppage-time model | Dispersion direction reported (§11.6); each G-step beats the previous one or is dropped |
 | 3.2 | `sim/emulator.py`: team-only grid, bicubic spline per market, L-BFGS-B inversion | Market reproduction error within tolerance; cached per model version |
-| 3.3 | `models/minutes.py` (M4): staged LightGBM with monotone constraints, isotonic calibration, small-sample prior blend, horizon drift, news overlay (gap 1) | ECE ≤ 0.02 on start and 60+; A4 logged |
-| 3.4 | `models/attack.py` (M5/M6): conjugate Gamma-Poisson with decay, Beta shot quality, shrunk finishing, penalties and own goals | A5 logged (low-minutes players) |
+| 3.3 | `models/minutes.py` (M4): staged XGBoost with monotone constraints, isotonic calibration, substitution-era shift, news overlay (gap 1) | **Built** (§4.4): ECE 0.002 / 0.004; A4 beats naive |
+| 3.4 | `models/attack.py` (M5/M6): conjugate Gamma-Poisson with decay, shrunk shot quality and finishing, penalties and own goals | **Built** (§4.4): A5 logged |
 | 3.5 | `models/defence.py` (M7): NegBin by game state | Threshold Brier and PIT; walk-forward within 2025/26 + live (open question 1c) |
 | 3.6 | `models/gk.py`, `models/cards.py`, `models/bonus.py` (M8–M10; BPS weights from the rules YAML `bps` block) | Save-point log loss; card Brier; bonus accuracy |
-| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | §8.5 validation suite passes; property tests (goals conserve, ≤ 11 on pitch, sub limit) |
+| 3.7 | `sim/simulator.py`: vectorised (sims × players) minute stepper, common random numbers, epistemic batches, DGW summation; calls `rules.engine.score_arrays` + `rules.bonus.assign_bonus_array` | Core **built** (§4.4): property tests pass; M7–M10 and the full §8.5 suite follow in PRs 5–6 |
 | 3.8 | `evaluate/attribution.py` (§11.5) | Decomposition sums to total error on every row |
 
 Exit: §8.5 validation passes; the simulator beats OpenFPL and the naive floors walk-forward; the `ep_next` comparison runs on live gameweeks (gap 2).
@@ -406,6 +406,90 @@ None of these is significant, as with G1–G3 in Phase 2: pre-match scorelines a
 - A 20 × 20 log-spaced grid of nominal rates × 10⁵ simulations with common random numbers, plus a smoothing bicubic spline per output. That's about 1/20 of the spec's 60² × 10⁵ (gap 5).
 - Mean goals are inverted to nominal rates by 2-D Newton. Wrapped as a `GoalModel`, it plugs into market inversion and fusion unchanged.
 - Emulators are cached in gold by parameter hash.
+
+### 4.4 Minutes (M4), attack (M5/M6) and the simulator core
+
+`fplh evaluate components --season 2022-23 --season 2023-24 --season 2024-25` scores M4 walk-forward at every deadline (refit every 4 deadlines; about 10 minutes) and M5/M6 at every deadline.
+
+**M4 minutes** (`features/minutes.py`, `models/minutes.py`). Three stages, each an XGBoost classifier (native API, monotone in recent starts and chance of playing), isotonically calibrated on the last 20 % of its training rows:
+- π^S = P(start);
+- π^60 = P(60+ | start);
+- π^B = P(appearance | not started).
+
+Features, each training row featurised at its own round deadline:
+- trailing starts, appearances, 60+ and minutes over 1/3/5/10 matches, from Understat lineups;
+- 60+ share when starting;
+- depth at position among the side's registered players;
+- rest days and days since the last appearance;
+- price;
+- chance of playing, which is missing until snapshot captures exist, so the news overlay of gap 1 is a no-op for now.
+
+Findings:
+- **Substitution eras.** The features carry no era, and trees cannot extrapolate the 2022/23 move to five substitutes. π^B therefore gets a logit shift per substitution limit, measured on that era's own training rows. Before 2022/23 those are only the 2019/20 restart. Measured on the era's own rows, the shift brought 2022/23's mean π^B from 0.191 to 0.169 (observed 0.163); the version calibrated against the latest window had given 0.191.
+- **No per-team normalisation.** The deadline squad list also holds departed and long-absent players, so scaling π^S to sum to 11 over it biased every probability.
+- **Bug found by the walk-forward.** A day count divided raw timestamps by ns per day, while fixture tables are in µs and the spine in ns. Walk-forward P(start) fell to 0.14 against 0.30 observed. A test now checks that spine and training features agree across units.
+- Horizon drift and the small-sample prior blend are not needed at horizon 1: the trees see each player's match count.
+
+| Stage | n | Brier | ECE | Mean predicted | Observed |
+|---|---|---|---|---|---|
+| Start | 80,973 | 0.0805 | **0.0015** | 0.301 | 0.301 |
+| 60+ given start | 24,357 | 0.0615 | **0.0039** | 0.929 | 0.933 |
+| Appearance given not started | 56,616 | 0.0866 | 0.0029 | 0.157 | 0.156 |
+| 60+ | 80,973 | 0.0845 | 0.0036 | 0.280 | 0.282 |
+| Appearance | 80,973 | 0.0924 | 0.0037 | 0.410 | 0.410 |
+
+**A4** (Brier against the naive share of the last three matches, 95 % gameweek-block CI):
+
+| Target | Model | Naive | Difference (95 % CI) |
+|---|---|---|---|
+| Start | 0.0805 | 0.1044 | −0.0241 [−0.0258, −0.0225] |
+| 60+ | 0.0845 | 0.1041 | −0.0198 [−0.0213, −0.0183] |
+| Appearance | 0.0924 | 0.1108 | −0.0185 [−0.0202, −0.0171] |
+
+**M5/M6 attack** (`models/attack.py`): decayed (half-life 365 days) Understat player-matches and shots give each player:
+- a Gamma–Poisson non-penalty shot rate, shrunk to the mean of the player's position × role group, with prior strength from the method of moments;
+- shot quality (xG per shot) shrunk with 20 pseudo-shots;
+- finishing (goals per xG) shrunk with 30 pseudo-xG towards 1;
+- an assist weight (xA per 90, Gamma–Poisson);
+- a penalty-taker weight (decayed attempts).
+
+League constants: penalties are 7.4 % of goals, own goals 3.3 %; penalty conversion is 0.79; 0.021 missed penalties per side-match; 88 % of goals carry an FPL assist.
+
+**A5** (non-penalty goals per appearance, Poisson log loss with minutes as exposure, 95 % gameweek-block CI):
+
+| Players | n | Shrunk | Raw decayed per-90 | Difference (95 % CI) |
+|---|---|---|---|---|
+| All | 34,296 | 0.2692 | 0.3488 | −0.081 [−0.092, −0.070] |
+| Under 10 decayed 90s of history | 8,551 | 0.2197 | 0.4494 | −0.231 [−0.270, −0.191] |
+
+**Simulator core** (`sim/simulator.py`). The team process (G6) supplies goal and red-card minutes, so team totals are exactly those of the goal process.
+
+How players are placed:
+- **Starting XI:** 1 GK + 10 outfield, drawn by systematic sampling, so inclusion probabilities equal π^S exactly.
+- **Exits:** at the empirical exit minutes from lineups, with π^60 deciding 60+.
+- **Entrants:** ∝ π^B, within the era's substitution limit.
+- **Reds:** to on-pitch players.
+
+How goals are allocated:
+- **Own goals** are credited to opponents.
+- **Penalties** go to the taker on the pitch.
+- **Open-play goals** go ∝ M5/M6 rates.
+- **Assists** are given at the league share.
+- **Missed penalties** are added as their own events.
+
+Points come from `score_arrays`.
+
+Property tests (Hypothesis) check:
+- player goals plus opponents' own goals equal team goals;
+- exactly 11 starters with one GK;
+- substitutes within the limit;
+- minutes in range;
+- identical replays;
+- exact inclusion probabilities;
+- simulated starts and 60+ matching their targets;
+- the team-goal distribution matching the team-only simulation (χ²).
+
+10 fixtures × 5,000 simulations take 2.2 s (target ≤ 15 s). Cards, saves, defensive contributions and bonus come with M7–M10 in PR 5.
 
 ## 5. Phase 4: Decisions
 
