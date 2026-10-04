@@ -35,7 +35,7 @@ def test_isotonic_is_monotone_and_bounded() -> None:
     assert (np.diff(out) >= -1e-12).all() and out.min() >= 0 and out.max() <= 1
 
 
-def test_minutes_walk_forward_and_team_scaling() -> None:
+def test_minutes_walk_forward_and_era_shift() -> None:
     f = frames()
     store = SilverStore.from_frames(f)
     ds = deadlines(f)
@@ -50,6 +50,7 @@ def test_minutes_walk_forward_and_team_scaling() -> None:
     starts = q["p_start"].groupby([spine["fixture_uid"], spine["team"]]).sum()
     assert (starts <= 11 + 1e-9).all()  # five synthetic players per team: all capped at 1
     assert subs_used_per_side(info)  # lineups give substitutes used per side by limit
+    assert model.sub_shift and all(np.isfinite(list(model.sub_shift.values())))
 
 
 def test_attack_rates_and_fallbacks() -> None:

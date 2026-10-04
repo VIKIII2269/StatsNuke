@@ -5,6 +5,7 @@ import pytest
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from scipy.stats import chi2_contingency
 
 from fplh.models.goal_process import GoalProcessParams
 from fplh.rules.config import load_rules
@@ -20,6 +21,7 @@ from fplh.sim.simulator import (
     summarise,
     systematic_sample,
 )
+from fplh.sim.team import simulate_team
 
 PARAMS = GoalProcessParams.from_dict(
     yaml.safe_load((get_settings().configs_dir / "models" / "goal_process.yaml").read_text())[
@@ -108,3 +110,16 @@ def test_simulated_minutes_match_their_targets() -> None:
     busy = started.sum(0) > 2000
     # exits beyond the substitution limit stay on, so 60+ can only be higher than π^60
     assert (p60[busy] - h.p_full[busy] > -0.02).all()
+
+
+def test_team_goals_follow_the_team_only_simulation() -> None:
+    """§8.5: the player layer leaves the team-goal distribution of the goal process intact."""
+    fx = FixtureInputs("s:h:a", (1.6, 1.0), (side("h", 5), side("a", 6)), 5)
+    r = simulate_fixture(fx, PARAMS, RULES, League(), TimingModel(), 20_000, seed=11)
+    ref = simulate_team(PARAMS, np.array([[1.6, 1.0]]), 20_000, seed=99)
+    for full, team in ((r.home_goals, ref.home[0]), (r.away_goals, ref.away[0])):
+        cells = np.minimum(np.r_[full, team], 5)
+        table = np.array(
+            [np.bincount(cells[:20_000], minlength=6), np.bincount(cells[20_000:], minlength=6)]
+        )
+        assert chi2_contingency(table).pvalue > 1e-3
