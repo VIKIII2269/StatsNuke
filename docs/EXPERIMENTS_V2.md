@@ -54,6 +54,6 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 | football-data.co.uk Asian handicap and Betfair columns | Yes, already in bronze | AH consensus (B5) | ➖ small; not ingested yet (would invalidate caches) |
 | The Odds API (free 500 credits) | Yes, key set | Live 1X2 and totals from about 15 books, anytime-scorer props | ⏳ collecting; forward test B7 |
 | ClubElo API | Yes | Team ratings | 💤 low expected gain (market already in fusion) |
-| Betfair historical data, Basic plan | Free with a Betfair account | Minute-level exchange prices since 2016, incl. scorer markets | 💤 needs the owner's account |
-| API-Football free key (100 req/day) | Free with a key | Injuries, lineups | 💤 needs a key; timestamps must be checked for leakage |
+| Betfair historical data, Basic plan | Free with a Betfair account | Minute-level exchange prices since 2016, incl. scorer markets | ❌ not accessible to the owner |
+| API-Football free key (100 req/day) | Key set (`FPLH_API_FOOTBALL_KEY`) | Injuries, lineups | ⏳ coverage and leakage probe running in a side session (branch `claude/api-football-probe`) |
 | vaastav `xP` | Yes | — | ❌ leaks (F7) |
