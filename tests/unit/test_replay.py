@@ -146,3 +146,21 @@ def test_scoring_matches_the_rules_engine() -> None:
         )
         assert again.points == r["gross"]
         assert data.position[r["bench"].split(",")[0]] == "GK"  # substitute keeper first
+
+
+def test_versus_average_uses_the_last_scored_capture() -> None:
+    from fplh.evaluate.replay import versus_average
+
+    log = pd.DataFrame({"strategy": "s", "gw": [2, 3], "points": [60, 40]})
+    t = pd.Timestamp("2026-09-01", tz="UTC")
+    events = pd.DataFrame(
+        {
+            "season": "2026-27",
+            "gameweek": [2, 2, 3, 3],
+            "observed_at": [t, t + pd.Timedelta(days=1), t, t + pd.Timedelta(days=1)],
+            "average_entry_score": [None, 52.0, 47.0, None],
+            "highest_score": [None, 120.0, 98.0, None],
+        }
+    )
+    out = versus_average(log, events, "2026-27")
+    assert out["versus_average"].tolist() == [8.0, -7.0]

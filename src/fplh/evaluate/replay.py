@@ -404,3 +404,18 @@ def evaluate_replay(
         passed,
         logs,
     )
+
+
+def versus_average(log: pd.DataFrame, events: pd.DataFrame, season: str) -> pd.DataFrame:
+    """A live replay's points per gameweek against FPL's average and highest manager scores
+    (``fpl_event``, the last capture of each gameweek with a score)."""
+    ev = events[(events["season"] == season) & events["average_entry_score"].notna()]
+    ev = ev.sort_values("observed_at").drop_duplicates("gameweek", keep="last")
+    ev = ev.set_index("gameweek")[["average_entry_score", "highest_score"]]
+    joined = log.join(ev, on="gw", how="inner")
+    out: pd.DataFrame = joined.assign(
+        versus_average=joined["points"] - joined["average_entry_score"]
+    )
+    return out[
+        ["strategy", "gw", "points", "average_entry_score", "highest_score", "versus_average"]
+    ]
