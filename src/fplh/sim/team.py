@@ -44,6 +44,9 @@ class TeamSim:
     home: IntArray  # (F, S) final goals
     away: IntArray
     next_goal: IntArray  # (F, S): 0 home, 1 away, −1 none (after the start slot)
+    goal_slots: npt.NDArray[np.int8] | None = None  # (F, S, SLOTS, 2) goals per slot
+    red_slots: npt.NDArray[np.int8] | None = None  # (F, S, SLOTS, 2) reds per slot
+    length: IntArray | None = None  # (F, S) slots played (90 + stoppage)
 
 
 def _poisson(lam: Array, u: Array) -> IntArray:
@@ -95,6 +98,7 @@ def simulate_team(
     seed: int = 0,
     *,
     start: StartState | None = None,
+    record: bool = False,
 ) -> TeamSim:
     """``nominal``: (F, 2) per-90 base rates (home, away) in a level 11-v-11 state."""
     nominal = np.asarray(nominal, dtype=float)
@@ -119,6 +123,9 @@ def simulate_team(
         reds[0] += start.home_reds[:, None]
         reds[1] += start.away_reds[:, None]
     next_goal = np.full(shape, -1, dtype=np.int64)
+    goal_slots = np.zeros((*shape, SLOTS, 2), dtype=np.int8) if record else None
+    red_slots = np.zeros((*shape, SLOTS, 2), dtype=np.int8) if record else None
+    length = np.full(shape, REGULAR, dtype=np.int64)
     third_effect = np.asarray(params.red_third)
     intensity = Intensity(params)
     for t in range(SLOTS):
@@ -127,6 +134,8 @@ def simulate_team(
         if t >= REGULAR and surv[t] <= 0:
             break
         active = (v < surv[t])[None, :] & (t >= t0)[:, None]  # (F, S)
+        if t >= REGULAR:
+            length += (v < surv[t])[None, :]
         if not active.any():
             continue
         new_goals = []
@@ -147,10 +156,16 @@ def simulate_team(
         next_goal = np.where(first, np.where(new_goals[0] > 0, 0, 1), next_goal)
         goals[0] += new_goals[0]
         goals[1] += new_goals[1]
+        if goal_slots is not None:
+            goal_slots[:, :, t, 0] = new_goals[0]
+            goal_slots[:, :, t, 1] = new_goals[1]
         if params.reds_on:
             reds[0] += new_reds[0]
             reds[1] += new_reds[1]
-    return TeamSim(goals[0], goals[1], next_goal)
+            if red_slots is not None:
+                red_slots[:, :, t, 0] = new_reds[0]
+                red_slots[:, :, t, 1] = new_reds[1]
+    return TeamSim(goals[0], goals[1], next_goal, goal_slots, red_slots, length)
 
 
 def score_grid(sim: TeamSim, cap: int = 10) -> Array:
