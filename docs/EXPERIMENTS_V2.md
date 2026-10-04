@@ -36,6 +36,16 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 | B5 | Asian handicap consensus | CLV 2017/18–2024/25 | Bet365: almost no edges. Best price across books: +2.4 % [+1.0, +3.9], n = 134 | ➖ small |
 | B6 | Betfair exchange as the anchor or venue | CLV | No edge | ❌ |
 
+## Incidents
+
+- **20:50 UTC: the container restarted.** Every running job was lost before finishing, so the queue restarted at 21:00 as one sequential pipeline with at most 2 processes. Contention had made the jobs about 5× slower. The cached runs and code survived.
+- **API-Football probe** (side session, branch `claude/api-football-probe`):
+  - Injury records are post-match cleanup, so they leak: unusable for backtests.
+  - Lineups and player stats exist for 2022–24, but only after kickoff.
+  - The current season needs a paid plan.
+  - The account was suspended after a burst of requests; the owner must reinstate it in the dashboard.
+  - ❌ No historical feature gain.
+
 ## Tonight's queue (in order)
 
 1. ⏳ F1b: simulator with news on 2021/22. Also 2017/18–2020/21 runs for stack training, and the test-season run.
@@ -56,5 +66,5 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 | The Odds API (free 500 credits) | Yes, key set | Live 1X2 and totals from about 15 books, anytime-scorer props | ⏳ collecting; forward test B7 |
 | ClubElo API | Yes | Team ratings | 💤 low expected gain (market already in fusion) |
 | Betfair historical data, Basic plan | Free with a Betfair account | Minute-level exchange prices since 2016, incl. scorer markets | ❌ not accessible to the owner |
-| API-Football free key (100 req/day) | Key set (`FPLH_API_FOOTBALL_KEY`) | Injuries, lineups | ⏳ coverage and leakage probe running in a side session (branch `claude/api-football-probe`) |
+| API-Football free key (100 req/day) | Key set (`FPLH_API_FOOTBALL_KEY`) | Injuries, lineups | ❌ injuries post-match (leak); current season paid; account suspended after a burst |
 | vaastav `xP` | Yes | — | ❌ leaks (F7) |
