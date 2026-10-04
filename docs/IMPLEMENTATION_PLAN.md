@@ -658,6 +658,117 @@ How the error divides:
 
 Exit: replay beats the strongest baseline with a bootstrap CI excluding zero.
 
+**Status:** built (PRs #11, #12 and this slice). **The exit gate fails**: the simulator's decisions come first in every season, but the margin over the OpenFPL replica is not significant. The results are reported as they came out, as in Phase 2.
+
+### 5.1 Game rules, scoring and prices
+
+- **Chip rules corrected per season** (`configs/rules/fpl_*.yaml`, `Chips.windows`):
+  - wildcards in two halves (2022/23 [2–16], [17–38]; 2023/24 [2–20], [21–38]; 2024/25 [2–19], [20–38]);
+  - one free hit, bench boost and triple captain before 2025/26; two sets from 2025/26;
+  - free-transfer banking capped at 2 before 2024/25 and 5 after;
+  - special top-ups as `special_free_transfers` (2022/23 GW17: 15 after the World Cup; 2025/26 GW16: 5 for AFCON).
+  - Seasons before 2022/23 are marked approximate. Every strategy runs the same rules, so comparisons stay fair.
+- **`rules/team.py`:** official auto-substitution (bench order, GK for GK, formation minimums), vice-captain, and the triple-captain and bench-boost multipliers.
+- **`features/prices.py`:** the price at each deadline (carried forward over blanks) and the official sell-price formula. Prices are game state, never a model feature.
+
+### 5.2 The optimiser (`optimize/milp.py`)
+
+- **ARCHITECTURE §10.1 in full** over `scipy.optimize.milp` (HiGHS, no new dependency):
+  - squad, XI, captain and transfer flow;
+  - budget with sell prices, hits and capped free-transfer banking;
+  - the free-hit squad copy;
+  - chip windows and allowances.
+- **The player pool** is the squad plus the top 25 per position by discounted horizon EV, about 3,700 variables at H = 5.
+- **Chips are decided by `plan_week`, not jointly** (the joint model was slow):
+  1. a base plan without chips;
+  2. bench boost and triple captain valued from the base plan;
+  3. free hit and wildcard valued by solves forced this week;
+  4. a chip is played only if this week is its best in the horizon and its gain beats an a-priori opportunity cost (wildcard 20, free hit and bench boost 15, triple captain 10).
+- **Tested** on toy instances against brute force, with a violating input for every constraint.
+
+### 5.3 The season replay: the exit gate
+
+`fplh evaluate replay --season 2022-23 --season 2023-24 --season 2024-25` (about 30 minutes on 3 cores once forecasts are cached).
+
+**The replay.** Every strategy:
+- starts at GW2 with a free £100m squad (the spine is empty at GW1, so GW1 is excluded for all);
+- solves the same MILP at each deadline (H = 5, δ = 0.9, β = 0.1, fixed a priori);
+- trades at that deadline's prices;
+- is scored on actual points with official auto-subs.
+
+**The forecasts:**
+- the simulator gives native horizon-5 forecasts;
+- horizon-1 forecasters repeat their next-week per-fixture forecast for each future fixture (the known schedule, including doubles and blanks);
+- "simulator (repeat)" isolates the value of forecasting ahead.
+
+| Strategy | 2022/23 | 2023/24 | 2024/25 | Total | Hits | Transfers | Captain points per GW |
+|---|---|---|---|---|---|---|---|
+| **Simulator (horizon 5)** | 2,272 | **2,384** | **2,300** | **6,956** | **39** | 250 | 7.80 |
+| Simulator (repeat) | **2,276** | 2,304 | 2,271 | 6,851 | 130 | 350 | 8.00 |
+| OpenFPL replica (repeat) | 2,185 | 2,250 | 2,264 | 6,699 | 117 | 344 | 7.81 |
+| A0 (repeat) | 2,050 | 1,958 | 2,212 | 6,220 | 100 | 312 | 7.82 |
+| Last 5 (repeat) | 1,977 | 2,005 | 2,018 | 6,000 | 158 | 378 | 6.89 |
+
+Points are net of hits over GW2–38. Every strategy used all of its chips.
+
+**The gate** (simulator horizon 5 − baseline, points per gameweek, 110 gameweek blocks, 95 % CI):
+
+| Baseline | Per GW | 95 % CI | DM p | Total | 2022/23 | 2023/24 | 2024/25 |
+|---|---|---|---|---|---|---|---|
+| OpenFPL replica (strongest) | +2.34 | [−1.26, +6.05] | 0.21 | +257 | +87 | +134 | +36 |
+| A0 | +6.69 | [+3.11, +10.32] | 0.001 | +736 | +222 | +426 | +88 |
+| Last 5 | +8.69 | [+4.84, +12.66] | < 0.001 | +956 | +295 | +379 | +282 |
+
+**Exit gate: FAIL.**
+- The simulator leads the replica in all three seasons, by 257 points in total, but the CI includes 0.
+- That is as expected from Phase 3: the forecast edge over the replica was 0.8 % of MSE. Gameweek points are noisy (sd about 15), so 110 gameweeks detect about 4 points per gameweek, not 2.
+- Forecasting ahead adds +0.95 points per gameweek over repeating ([−1.76, +3.51], p 0.48). It shows mostly in discipline: 39 hits against 130, and 100 fewer transfers.
+- **A0 and last 5 are overconfident:** their mean expected XI score is 85–93 against 60 actual. The optimiser chases their noise. Simulator and replica are well calibrated (62 expected, 65–67 actual).
+
+**What could pass the gate next:**
+- **Better forecasts.** These are the Phase 3 levers: the news overlay, set-piece order and props.
+- **More seasons**, which narrow the CI. 2021/22 has approximate rules; 2025/26 is the holdout.
+- **Variance reduction:** a paired replay on common squads, so differences come from forecasts, not path dependence.
+
+**Live comparison with the average manager.** `lake/silver/fpl_live.py` keeps FPL's `average_entry_score` and `highest_score` per gameweek, and `versus_average` scores a replay against them. It runs as live 2026/27 gameweeks finish.
+
+### 5.4 The paper ledger (`delivery/ledger.py`)
+
+`fplh evaluate ledger --season …` compares the fused match probabilities at each deadline with the best pre-match prices observable then (football-data's maximum, not closing):
+- EV = p̂·o − 1;
+- quarter Kelly above EV 3 %, capped at 5 % of the paper bankroll;
+- CLV against the de-vigged closing price (Pinnacle, else the average), de-vigged one market at a time.
+
+**Nothing can place a bet:** `tests/unit/test_ledger.py` fails on any HTTP write verb or bookmaker order endpoint in `src/`.
+
+On 2022/23–2024/25 (499 paper bets):
+- mean CLV −1.15 % [−2.16 %, −0.14 %], so **the model has no edge on the market**;
+- ROI +2.3 % is noise at this sample size;
+- the fused probabilities tie the market (Phase 2), and the bias experiments find a small away bias (+0.6 pp) that does not survive as CLV.
+
+**Research (paper only, not built into the ledger):**
+- A no-model consensus strategy bets soft-book prices above the Pinnacle-early fair price by more than 2 %. Over 2016/17–2024/25 it has +3.2 % mean CLV on 1,442 bets, positive in every one of nine seasons.
+- Real accounts get limited quickly under such a strategy. It is recorded as a paper benchmark for Phase 5.
+
+### 5.5 Odds collection on the free plan
+
+The Odds API free plan gives 500 credits a month. `fplh collect odds --due` (hourly in `Collect`, secret `FPLH_ODDS_API_KEY`) plans the month with `collectors/odds_budget.py`.
+
+**Spending priorities**, strictly in order:
+1. match odds (h2h + totals, 2 credits) in the hour before each kickoff time, after the lineups;
+2. the hour before that, to see the line move on team news;
+3. gameweek deadlines;
+4. anytime-scorer props per fixture (1 credit) at closing;
+5. the same props at the deadline;
+6. spare snapshots paced to the end of the month.
+
+**Never-exceed guarantee:**
+- Every run reads the live `x-requests-remaining` header.
+- Every call is refused if it would leave fewer than 10 credits.
+- Kickoffs seen earlier are remembered, so a round's later matches do not look like new deadlines.
+
+In simulations of real 2025/26 months, runs spend 489–490 credits and never go below the floor, even with half the hourly runs missed.
+
 ## 6. Phase 5: Extensions, each gated by its ablation row
 
 G7 lineup-aware rates · M11 v1 (LightGBM, A9) → v2 (multi-task network, A10) · anytime-scorer props (A11) · `optimize/saa.py` with rank-aware objective and CVaR (A12) · M12 price changes.

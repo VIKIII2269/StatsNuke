@@ -223,10 +223,20 @@ def collect_odds(
         bool, typer.Option("--due/--now", help="Only fire calls the budget planner has due.")
     ] = True,
 ) -> None:
-    """EPL h2h + totals from The Odds API, within the monthly credit budget."""
-    from datetime import UTC, datetime
+    """EPL match odds and anytime-scorer props from The Odds API, planned to use the month's
+    credits fully and checked against the live remaining credits before every call."""
+    from datetime import UTC, datetime, timedelta
 
-    from fplh.collectors.odds_budget import due, plan_calls
+    from fplh.collectors.odds_budget import (
+        FLOOR,
+        WINDOW,
+        PlannedCall,
+        affordable,
+        due,
+        plan_calls,
+        spare_due,
+    )
+    from fplh.lake.bronze import read_bronze
 
     s = get_settings()
     if s.odds_api_key is None:
@@ -239,34 +249,67 @@ def collect_odds(
     month = f"{now:%Y-%m}"
     state = json.loads(lake.get_bytes(ODDS_STATE_KEY)) if lake.exists(ODDS_STATE_KEY) else {}
     if state.get("month") != month:
-        state = {"month": month, "fired": [], "used": 0}
+        kept = state.get("kickoffs", [])  # a round can straddle the month boundary
+        state = {"month": month, "fired": [], "used": 0, "last_market": None, "kickoffs": kept}
 
-    ev = _backfill(odds.SOURCE, [odds.events_spec(key, base)], lake)
-    from fplh.lake.bronze import read_bronze
+    def remaining_of(meta: dict[str, object], fallback: int) -> int:
+        headers = meta.get("response_headers") or {}
+        value = headers.get("x-requests-remaining") if isinstance(headers, dict) else None
+        return int(float(value)) if value not in (None, "") else fallback
 
+    ev = _backfill(odds.SOURCE, [odds.events_spec(key, base)], lake)  # free
     meta, payload = read_bronze(lake, ev.written[0])
-    kickoffs = odds.kickoffs_from_events(json.loads(payload))
-    used = int(meta["response_headers"].get("x-requests-used", state["used"]))
+    events = odds.events_from_listing(json.loads(payload))
+    seen = {datetime.fromisoformat(k) for k in state.get("kickoffs", [])} | {k for _, k in events}
+    state["kickoffs"] = sorted(k.isoformat() for k in seen if k >= now - timedelta(days=7))
+    remaining = remaining_of(meta, s.odds_monthly_credits - int(state["used"]))
     month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
     month_end = datetime(now.year + now.month // 12, now.month % 12 + 1, 1, tzinfo=UTC)
+    cost, pcost = odds.call_cost(), odds.prop_cost()
     plan = plan_calls(
-        kickoffs,
+        sorted(seen),
+        events=events,
         period_start=max(month_start, now),
         period_end=month_end,
-        budget=s.odds_monthly_credits,
-        used=used,
-        cost=odds.call_cost(),
+        available=max(remaining - FLOOR, 0),
+        cost=cost,
+        prop_cost=pcost,
     )
     calls = due(plan, now, state["fired"]) if due_only else plan[:1]
+    spare = remaining - FLOOR - sum(c.credits for c in plan)
+    last = state.get("last_market")
+    if (
+        due_only
+        and not any(c.is_market for c in calls)
+        and spare_due(
+            now,
+            plan=plan,
+            spare_credits=spare,
+            period_end=month_end,
+            last_market_call=datetime.fromisoformat(last) if last else None,
+            cost=cost,
+        )
+    ):
+        calls.append(PlannedCall(now, now + WINDOW, "spare", cost))
     if not calls:
-        typer.echo(f"no odds call due (credits used this month: {used})")
-    for call in calls[:1]:
-        res = _backfill(odds.SOURCE, [odds.odds_spec(key, call.kind, base)], lake)
+        typer.echo(f"no odds call due (credits remaining: {remaining})")
+    for call in calls:
+        if not affordable(remaining, call.credits):
+            typer.echo(f"skipped {call.id}: {remaining} credits left, floor {FLOOR}")
+            continue
+        spec = (
+            odds.odds_spec(key, call.kind, base)
+            if call.is_market
+            else odds.event_props_spec(key, str(call.event_id), call.kind, base)
+        )
+        res = _backfill(odds.SOURCE, [spec], lake)
         m, _ = read_bronze(lake, res.written[0])
-        used = int(m["response_headers"].get("x-requests-used", used + call.credits))
+        remaining = remaining_of(m, remaining - call.credits)
         state["fired"].append(call.id)
-        typer.echo(f"fired {call.id}; credits used this month: {used}")
-    state["used"] = used
+        if call.is_market:
+            state["last_market"] = now.isoformat()
+        typer.echo(f"fired {call.id}; credits remaining: {remaining}")
+    state["used"] = s.odds_monthly_credits - remaining
     lake.put_bytes(ODDS_STATE_KEY, json.dumps(state).encode(), overwrite=True)
 
 
@@ -683,6 +726,49 @@ def evaluate_phase3_cmd(
     for k, v in result.guardrails.items():
         typer.echo(f"{k}: {v:.4f}")
     typer.echo(f"exit gate: {'PASS' if result.passed else 'FAIL'}")
+
+
+@evaluate_app.command("replay")
+def evaluate_replay_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    jobs: Annotated[int, typer.Option(help="Parallel replays.")] = 3,
+    sensitivity: Annotated[
+        bool, typer.Option(help="Also replay the simulator with other β and δ.")
+    ] = False,
+) -> None:
+    """Season replay (Phase 4 exit gate): every forecaster through the same optimiser."""
+    import pandas as pd
+
+    from fplh.evaluate.replay import evaluate_replay
+
+    uri = get_settings().lake_uri
+    report = evaluate_replay(Lake(uri), uri, season, jobs=jobs, sensitivity=sensitivity)
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        for frame in (report.totals, report.summary, report.gate, report.sensitivity):
+            if not frame.empty:
+                typer.echo(frame.round(3).to_string())
+    typer.echo(f"horizon forecasts vs repeat: {report.horizon_value}")
+    typer.echo(f"exit gate: {'PASS' if report.passed else 'FAIL'}")
+
+
+@evaluate_app.command("ledger")
+def evaluate_ledger_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    min_ev: Annotated[float, typer.Option(help="Paper-bet EV threshold.")] = 0.03,
+) -> None:
+    """Paper-only market ledger: EV, fractional Kelly, CLV (no bets are ever placed)."""
+    from fplh.delivery.ledger import LedgerConfig, run_ledger
+    from fplh.models.market import load_devig_method
+
+    cfg = LedgerConfig(min_ev=min_ev, devig_method=load_devig_method())
+    book, bets, summary = run_ledger(Lake(get_settings().lake_uri), season, cfg)
+    all_clv = book["clv"].dropna()
+    typer.echo(f"priced outcomes: {len(book)}, mean CLV (all) {all_clv.mean():.4f}")
+    if not bets.empty:
+        by = bets.groupby("market")[["clv", "profit", "stake"]].agg(["mean", "sum", "count"])
+        typer.echo(by.round(4).to_string())
+    for k, v in summary.items():
+        typer.echo(f"{k}: {v:.4f}")
 
 
 @evaluate_app.command("attribution")

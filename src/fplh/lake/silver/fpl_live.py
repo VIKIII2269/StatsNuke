@@ -77,6 +77,9 @@ def snapshots(lake: Lake, teams: TeamResolver) -> tuple[pd.DataFrame, pd.DataFra
                     "deadline_at": pd.Timestamp(ev["deadline_time"]),
                     "finished": bool(ev.get("finished")),
                     "data_checked": bool(ev.get("data_checked")),
+                    # the average and highest manager scores, once the gameweek has them
+                    "average_entry_score": ev.get("average_entry_score"),
+                    "highest_score": ev.get("highest_score"),
                     "observed_at": obs,
                     "source": SOURCE,
                 }

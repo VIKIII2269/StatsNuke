@@ -54,6 +54,13 @@ xG improves M1 significantly. M1 alone reaches RPS 0.197 against the market's 0.
 
 The simulator's MSE is 3.633, against 3.661 for an OpenFPL re-implementation, 4.015 for A0 and 4.354 for the last-5 average. Every gameweek-block CI excludes 0. P(60+) and P(haul) are calibrated to within 0.01. Minutes is the largest single contribution. See [the plan, §4.6](docs/IMPLEMENTATION_PLAN.md#46-the-exit-gate-the-player-simulator-walk-forward).
 
+**Phase 4 (decisions)** is built: a multi-gameweek MILP for transfers, captaincy and chips, a season replay of every forecaster through the same optimiser, and a paper-only market ledger.
+- **Replay totals over 2022/23–2024/25:** the simulator scores 6,956, against 6,699 for the OpenFPL replica, 6,220 for A0 and 6,000 for last-5. The simulator comes first in every season.
+- **The exit gate fails:** the margin over the replica (+2.3 points per gameweek) has a CI that includes 0.
+- **The ledger** shows no betting edge (CLV −1.2 %).
+
+See [the plan, §5](docs/IMPLEMENTATION_PLAN.md#5-phase-4-decisions).
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 if needed).
@@ -86,10 +93,15 @@ uv run fplh evaluate phase3 --season 2022-23 --season 2023-24 --season 2024-25  
 uv run fplh evaluate attribution --season 2022-23 --season 2023-24 --season 2024-25 --every 2
 uv run fplh evaluate ep-next --season 2026-27                                     # live gameweeks with captures
 
+# Phase 4: decisions
+uv run fplh evaluate replay --season 2022-23 --season 2023-24 --season 2024-25    # the exit gate (~30 min cached)
+uv run fplh evaluate ledger --season 2022-23 --season 2023-24 --season 2024-25    # paper only
+
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures
 uv run fplh collect fpl-snapshot --only-within-hours 24   # store only near a deadline
 uv run fplh collect fpl-post-gw                           # latest finalised gameweek, once
+uv run fplh collect odds --due                            # needs FPLH_ODDS_API_KEY; ≤ 490 of 500 credits a month
 
 # score any events CSV with a season's rules
 uv run fplh rules score --season 2026/27 --csv events.csv --out points.csv
