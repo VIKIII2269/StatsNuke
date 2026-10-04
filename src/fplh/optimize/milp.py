@@ -459,23 +459,30 @@ def plan_week(
     chip_cost: Mapping[str, float] | None = None,
     pool_size: int = 25,
     transfer_penalty: float = 0.01,
-    time_limit: float = 60.0,
-    gap: float = 5e-4,
+    time_limit: float = 30.0,
+    gap: float = 2e-3,
+    wildcard_time_limit: float = 10.0,
 ) -> Plan:
     """This week's decision with chips decomposed (the joint chip model's LP relaxation is
     weak: an 85 % gap after 30 s on a real week, against optimality in about 1 s without).
 
     1. the plan without chips;
     2. bench boost and triple captain valued in each horizon week from that plan (bench and
-       captain points), the free hit by a solve with it forced in each week, the wildcard
-       by a solve with it forced now;
+       captain points); the free hit and the wildcard by solves with them forced now (a
+       free hit held for a later week is priced by its opportunity cost; the forced
+       wildcard solve, the hardest, gets ``wildcard_time_limit`` and a 1 % gap);
     3. a chip is played now only if its best week is this week and its gain beats the
        opportunity cost of a copy that would outlast the horizon.
     """
     costs = dict(DEFAULT_CHIP_COST if chip_cost is None else chip_cost)
     windows = remaining_windows(rules, state)
 
-    def solve(r: SquadRules, force: tuple[str, int] | None = None) -> list[Plan]:
+    def solve(
+        r: SquadRules,
+        force: tuple[str, int] | None = None,
+        limit: float = time_limit,
+        rel_gap: float = gap,
+    ) -> list[Plan]:
         return optimise(
             players,
             state,
@@ -487,8 +494,8 @@ def plan_week(
             chip_cost={},
             transfer_penalty=transfer_penalty,
             force_chip=force,
-            time_limit=time_limit,
-            gap=gap,
+            time_limit=limit,
+            gap=rel_gap,
         )
 
     base = solve(replace(rules, chip_windows={}))[0]
@@ -514,14 +521,14 @@ def plan_week(
             net = disc * e[gw].get(base.captains[t], 0.0) - cost("triple_captain", gw)
             if net > best[0]:
                 best = (net, "triple_captain", t, base)
-        if window("free_hit", gw):
+        if t == 0 and window("free_hit", gw):
             fh = solve(rules, ("free_hit", gw))
             if fh:
                 net = fh[0].objective - base.objective - cost("free_hit", gw)
                 if net > best[0]:
                     best = (net, "free_hit", t, fh[0])
     if window("wildcard", horizon[0]):
-        wc = solve(rules, ("wildcard", horizon[0]))
+        wc = solve(rules, ("wildcard", horizon[0]), wildcard_time_limit, 0.01)
         if wc:
             net = wc[0].objective - base.objective - cost("wildcard", horizon[0])
             if net > best[0]:

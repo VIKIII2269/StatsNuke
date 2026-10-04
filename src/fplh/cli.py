@@ -685,6 +685,29 @@ def evaluate_phase3_cmd(
     typer.echo(f"exit gate: {'PASS' if result.passed else 'FAIL'}")
 
 
+@evaluate_app.command("replay")
+def evaluate_replay_cmd(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    jobs: Annotated[int, typer.Option(help="Parallel replays.")] = 3,
+    sensitivity: Annotated[
+        bool, typer.Option(help="Also replay the simulator with other β and δ.")
+    ] = False,
+) -> None:
+    """Season replay (Phase 4 exit gate): every forecaster through the same optimiser."""
+    import pandas as pd
+
+    from fplh.evaluate.replay import evaluate_replay
+
+    uri = get_settings().lake_uri
+    report = evaluate_replay(Lake(uri), uri, season, jobs=jobs, sensitivity=sensitivity)
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        for frame in (report.totals, report.summary, report.gate, report.sensitivity):
+            if not frame.empty:
+                typer.echo(frame.round(3).to_string())
+    typer.echo(f"horizon forecasts vs repeat: {report.horizon_value}")
+    typer.echo(f"exit gate: {'PASS' if report.passed else 'FAIL'}")
+
+
 @evaluate_app.command("attribution")
 def evaluate_attribution_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
