@@ -570,6 +570,23 @@ def models_fit_devig(
     typer.echo(f"wrote {path}: devig = {method}")
 
 
+@evaluate_app.command("components")
+def evaluate_components(
+    season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+) -> None:
+    """M4 minutes (Brier, ECE, A4) and M5/M6 attack (A5) walk-forward checks."""
+    import pandas as pd
+
+    from fplh.evaluate.components import evaluate_attack, evaluate_minutes
+
+    lake = Lake(get_settings().lake_uri)
+    table, a4 = evaluate_minutes(lake, season)
+    a5 = evaluate_attack(lake, season)
+    with pd.option_context("display.width", 200, "display.max_columns", 20):
+        for frame in (table, a4, a5):
+            typer.echo(frame.round(4).to_string(index=False))
+
+
 @evaluate_app.command("g-ladder")
 def evaluate_g_ladder(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],

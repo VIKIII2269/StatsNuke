@@ -158,6 +158,7 @@ def fit_attack(info: InformationSet, half_life_days: float = 365.0) -> AttackRat
             "xg_per_shot": quality,
             "finishing": finishing,
             "goal_rate": shot_rate * quality * finishing,
+            "raw_goal_rate": agg["g"] / agg["e"].where(agg["e"] > 0),  # A5: no shrinkage
             "assist_rate": _gamma_poisson(agg["a"], agg["e"], group),
             "pen_weight": agg["pw"],
         }
