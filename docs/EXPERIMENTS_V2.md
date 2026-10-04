@@ -1,0 +1,59 @@
+# Model v2: night plan and experiment log
+
+Living document, updated as results arrive. **Rule:** a change is kept only if it beats the
+current model with a 95 % gameweek-block CI excluding 0.
+
+**Seasons:**
+- 2021/22 is the tuning season.
+- 2022/23–2024/25 are the test seasons, scored once per final candidate.
+- 2025/26 is the holdout and is never touched.
+
+Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (needs data/keys)
+
+## Results so far
+
+### FPL forecasts
+
+| # | Idea | Test | Result | Status |
+|---|---|---|---|---|
+| F1 | **Transfer-news minutes.** FPL round transfers (owners selling or buying) are public at the deadline and serve as a team-news proxy. They feed the minutes model, plus team-mates being sold. | M4 Brier on 2021/22 | P(start) −7.9 % [CI excludes 0], P(60+) −7.1 %, P(appear) −10.1 % | ✅ (minutes) |
+| F1b | F1 inside the full simulator | Points MSE on 2021/22 | — | ⏳ |
+| F2 | Simulator + OpenFPL replica blend | Points MSE on 2021/22 | Equal blend 4.173 vs simulator 4.194 (−0.5 %) | ✅ first look |
+| F3 | **Stacking layer (M11 v1).** Simulator summary + replica + crowd (selling, buying, ownership) + price, as gradient-boosted trees starting from the blend. Walk-forward. | MSE, 2021/22 then 2022/23–2024/25 | Linear version −1.4 % in-sample. Needs 2017/18–2020/21 forecasts to train. | ⏳ |
+| F4 | Home/away bias fix | Fused home-goal residual vs results | +0.09, +0.08, −0.20 per season (SE 0.07): season swings, not bias | ❌ |
+| F5 | Lineup-aware team rates (G7) | Market share in fused rates | 93 % of fixtures have prices at the deadline (fusion weight 0.83); known absences are already priced | ❌ |
+| F6 | Penalty-taker variants (team-only, half-lives 90–730 d) | Taker hit rate 2020/21–2021/22 | ±2–3 pp, inconsistent | ❌ |
+| F7 | vaastav `xP` (FPL's expected points) as a feature | Timing test | Correlates more with the same round's points (0.63) than the previous (0.53): recorded after the round, so it leaks | ❌ |
+
+### Paper betting ledger
+
+| # | Idea | Test | Result | Status |
+|---|---|---|---|---|
+| B1 | **Consensus value:** named soft books' pre-closing price > Pinnacle power-de-vigged fair price | CLV 2016/17–2024/25 | 466 bets, +2.9 % [+1.6, +4.2], ROI +8 %; tune +2.9 %, test +3.0 % (n = 60) | ✅ in ledger |
+| B2 | Hybrid: blend our model into the fair price | CLV 2022/23–2024/25 | −1.4 % | ❌ |
+| B3 | Our model predicts the line move (early → close) | corr(model − early, close − early) | −0.06 to +0.04 (fused and M1) | ❌ (cause of no model edge) |
+| B4 | FPL transfer news predicts the line move | corr, 2,280 fixtures | −0.06 (right sign, about 3 SE), top 5 % move only 0.46 pp | ❌ as a bet signal |
+| B5 | Asian handicap consensus | CLV 2017/18–2024/25 | Bet365: almost no edges. Best price across books: +2.4 % [+1.0, +3.9], n = 134 | ➖ small |
+| B6 | Betfair exchange as the anchor or venue | CLV | No edge | ❌ |
+
+## Tonight's queue (in order)
+
+1. ⏳ F1b: simulator with news on 2021/22. Also 2017/18–2020/21 runs for stack training, and the test-season run.
+2. 🔜 F3: tune the stack on 2021/22 (blend weight, depth, rounds, features), then one test on 2022/23–2024/25 against v1 and the replica.
+3. 🔜 F8: per-position stack weights; the stack's calibration of P(haul) and ranking (top-10 precision, used by the optimiser).
+4. 🔜 Season replay with v2 forecasts (simulator with news at horizon 5, stacked). Does v2 pass the Phase 4 gate against the replica?
+5. 🔜 B7: live consensus paper tracker on The Odds API snapshots (about 10–15 UK books), logged per gameweek as data arrives.
+6. 🔜 F9: card memory 730 d and one season of BPS weights (small known gains from the Phase 3 tuning).
+7. 🔜 Docs, PR, merge on green CI.
+
+## Data sources
+
+| Source | Free? | What it adds | Status |
+|---|---|---|---|
+| FPL round transfers (vaastav, our captures) | Yes, already in the lake | News proxy (F1), crowd features (F3) | ✅ used |
+| football-data.co.uk Asian handicap and Betfair columns | Yes, already in bronze | AH consensus (B5) | ➖ small; not ingested yet (would invalidate caches) |
+| The Odds API (free 500 credits) | Yes, key set | Live 1X2 and totals from about 15 books, anytime-scorer props | ⏳ collecting; forward test B7 |
+| ClubElo API | Yes | Team ratings | 💤 low expected gain (market already in fusion) |
+| Betfair historical data, Basic plan | Free with a Betfair account | Minute-level exchange prices since 2016, incl. scorer markets | 💤 needs the owner's account |
+| API-Football free key (100 req/day) | Free with a key | Injuries, lineups | 💤 needs a key; timestamps must be checked for leakage |
+| vaastav `xP` | Yes | — | ❌ leaks (F7) |
