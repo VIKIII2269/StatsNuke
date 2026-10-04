@@ -15,14 +15,22 @@ Per fixture, ``n_sims`` matches are simulated:
 4. **Entrants.** As many bench players as there are exits, sampled with probabilities
    proportional to π^B, enter at the exit minutes in random order.
 5. **Red cards** from the team process send off an on-pitch player who was not due to be
-   substituted (no replacement).
+   substituted (no replacement), drawn ∝ M9 yellow rate when given.
 6. **Goals.** Each team goal is an own goal (credited to an opponent on the pitch,
    defenders most likely), a penalty (the on-pitch taker with the most decayed attempts)
    or open play: scorer ∝ M5/M6 goal rate among players on the pitch, then an FPL assist
    with the league's share, assister ∝ assist rate among team-mates.
-7. **Penalty misses** at the league rate per side, by the on-pitch taker.
-8. **Points** from ``rules.engine.score_arrays`` (cards, saves, defensive contributions
-   and bonus are added by PR 5's models).
+7. **Penalty misses** at the league rate per side, by the on-pitch taker; the opposing
+   goalkeeper on the pitch saves a share of them (M8).
+8. **Other events** (``Components`` and the optional ``SideInputs`` fields):
+   * yellow cards (M9): P = 1 − exp(−rate·minutes/90), at most one, none with a red;
+   * goalkeeper saves (M8): NegBin with mean m·g_k·(a + b·μ_opp), μ_opp the opponent's
+     mean goals;
+   * defensive actions (M7), only when the season's rules score them: Poisson per action
+     with a Gamma frailty per player-match shared by the actions;
+   * bonus (M10): BPS from the simulated events plus the player's residual, then the
+     official allocation over both sides' players who played.
+9. **Points** from ``rules.engine.score_arrays``.
 
 Random numbers come from one generator per fixture seeded by (seed, fixture uid), so
 replays are identical and comparisons can share common random numbers.
@@ -37,7 +45,11 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from fplh.models.bonus import BonusModel
+from fplh.models.defence import ACTIONS
+from fplh.models.gk import SaveModel
 from fplh.models.goal_process import REGULAR, GoalProcessParams
+from fplh.rules.bonus import assign_bonus_array
 from fplh.rules.config import Rules
 from fplh.rules.engine import score_arrays
 from fplh.sim.team import simulate_team
@@ -60,6 +72,11 @@ class SideInputs:
     goal_rate: Array
     assist_rate: Array
     pen_weight: Array
+    # PR 5 components; None leaves the event at zero
+    yellow_rate: Array | None = None  # M9, per 90
+    save_mult: Array | None = None  # M8 goalkeeper multiplier g_k
+    dc_rate: Array | None = None  # M7 (P, 3) per-90 rates of ACTIONS, opponent included
+    dc_size: Array | None = None  # M7 NegBin size of the player's group total
 
     def __len__(self) -> int:
         return len(self.player_uid)
@@ -71,6 +88,15 @@ class FixtureInputs:
     nominal: tuple[float, float]  # per-90 base rates (home, away) for the goal process
     sides: tuple[SideInputs, SideInputs]
     sub_limit: int = 5
+    mean_goals: tuple[float, float] | None = None  # μ (home, away) for saves; else simulated
+
+
+@dataclass
+class Components:
+    """League-level parts of M8 and M10 (``models/gk.py``, ``models/bonus.py``)."""
+
+    saves: SaveModel | None = None
+    bonus: BonusModel | None = None
 
 
 @dataclass
@@ -212,7 +238,9 @@ def simulate_fixture(
     timing: TimingModel,
     n_sims: int,
     seed: int = 0,
+    components: Components | None = None,
 ) -> FixtureResult:
+    comp = components or Components()
     rng = np.random.default_rng([seed, zlib.crc32(fx.fixture_uid.encode())])
     team = simulate_team(
         params, np.array([fx.nominal], dtype=float), n_sims, int(rng.integers(2**31)), record=True
@@ -227,7 +255,14 @@ def simulate_fixture(
     offs = [lu[2] for lu in lineups]
     counts = {
         name: [np.zeros((n_sims, len(side)), dtype=np.int64) for side in fx.sides]
-        for name in ("goals_scored", "assists", "own_goals", "penalties_missed", "red_cards")
+        for name in (
+            "goals_scored",
+            "assists",
+            "own_goals",
+            "penalties_missed",
+            "penalties_saved",
+            "red_cards",
+        )
     }
 
     sent_off = [np.full((n_sims, len(side)), NEVER, dtype=np.int64) for side in fx.sides]
@@ -243,14 +278,19 @@ def simulate_fixture(
         return out
 
     # red cards, in time order: an outfield player on the pitch who is not due to be
-    # substituted leaves, unreplaced (two reds in one slot are handled one at a time)
-    outfield = [(side.position != "GK")[None, :] for side in fx.sides]
+    # substituted leaves, unreplaced (two reds in one slot are handled one at a time);
+    # the player is drawn ∝ yellow rate (M9) when given
+    outfield = [
+        (side.position != "GK")[None, :]
+        * (side.yellow_rate if side.yellow_rate is not None else np.ones(len(side)))[None, :]
+        for side in fx.sides
+    ]
     for k in (0, 1):
         for t in np.unique(np.nonzero(red_slots[:, :, k])[1]):
             for nth in range(int(red_slots[:, t, k].max())):
                 rows = np.flatnonzero(red_slots[:, t, k] > nth)
                 ts = np.full(len(rows), t)
-                eligible = on_pitch(k, rows, ts) & (offs[k][rows] >= FULL) & outfield[k]
+                eligible = (on_pitch(k, rows, ts) & (offs[k][rows] >= FULL)) * outfield[k]
                 pick = _choose(eligible.astype(float), rng)
                 ok = pick >= 0
                 offs[k][rows[ok], pick[ok]] = min(int(t), FULL)
@@ -304,10 +344,19 @@ def simulate_fixture(
         taker = np.argmax(own * taker_w[None, :], axis=1)
         ok = own.any(axis=1)
         np.add.at(counts["penalties_missed"][k], (rows[ok], taker[ok]), 1)
+        # FPL counts a saved penalty as missed too: the keeper on the pitch saves a share
+        share = comp.saves.penalty_save_share if comp.saves is not None else 0.0
+        keeper = on_pitch(1 - k, rows, ts) & (fx.sides[1 - k].position == "GK")[None, :]
+        gk_idx = _choose(keeper.astype(float), rng)
+        saved = ok & (gk_idx >= 0) & (rng.random(len(rows)) < share)
+        np.add.at(counts["penalties_saved"][1 - k], (rows[saved], gk_idx[saved]), 1)
 
-    results = []
     cum = np.cumsum(goal_slots, axis=1)  # (S, T, 2) goals up to and including slot t
     t_max = goal_slots.shape[1]
+    dc_active = bool(
+        rules.defensive_contribution.DEF.points or rules.defensive_contribution.MID_FWD.points
+    )
+    all_events = []
     for k in (0, 1):
         side = fx.sides[k]
         on, off = ons[k], offs[k]
@@ -321,24 +370,64 @@ def simulate_fixture(
             - np.take_along_axis(opp_cum, np.clip(start_t, 0, None), axis=1) * (start_t >= 0),
             0,
         )
+        m = played / 90
         zeros = np.zeros_like(played)
-        events = {
-            "minutes": played,
-            "goals_scored": counts["goals_scored"][k],
-            "assists": counts["assists"][k],
-            "goals_conceded": conceded,
-            "own_goals": counts["own_goals"][k],
-            "penalties_saved": zeros,
-            "penalties_missed": counts["penalties_missed"][k],
-            "yellow_cards": zeros,
-            "red_cards": counts["red_cards"][k],
-            "saves": zeros,
-            "bonus": zeros,
-            "clearances_blocks_interceptions": zeros,
-            "tackles": zeros,
-            "recoveries": zeros,
-        }
-        position = np.broadcast_to(side.position, played.shape)
+        yellow = zeros
+        if side.yellow_rate is not None:  # M9: at most one, and none with a red
+            p_yellow = 1 - np.exp(-side.yellow_rate[None, :] * m)
+            yellow = ((rng.random(played.shape) < p_yellow) & (counts["red_cards"][k] == 0)).astype(
+                np.int64
+            )
+        saves = zeros
+        if comp.saves is not None and side.save_mult is not None:  # M8
+            mu_opp = (
+                fx.mean_goals[1 - k]
+                if fx.mean_goals is not None
+                else float((team.away if k == 0 else team.home)[0].mean())
+            )
+            gk = (side.position == "GK")[None, :]
+            mean = comp.saves.mean(mu_opp, played, side.save_mult[None, :]) * gk
+            size = comp.saves.size
+            saves = rng.poisson(rng.gamma(size, 1.0, played.shape) * mean / size)
+        actions = {a: zeros for a in ACTIONS}
+        if dc_active and side.dc_rate is not None:  # M7: shared Gamma frailty per match
+            size_p = side.dc_size if side.dc_size is not None else np.full(len(side), 20.0)
+            frailty = rng.gamma(size_p[None, :], 1.0 / size_p[None, :], played.shape)
+            for j, a in enumerate(ACTIONS):
+                actions[a] = rng.poisson(side.dc_rate[None, :, j] * m * frailty)
+        all_events.append(
+            {
+                "minutes": played,
+                "goals_scored": counts["goals_scored"][k],
+                "assists": counts["assists"][k],
+                "goals_conceded": conceded,
+                "own_goals": counts["own_goals"][k],
+                "penalties_saved": counts["penalties_saved"][k],
+                "penalties_missed": counts["penalties_missed"][k],
+                "yellow_cards": yellow,
+                "red_cards": counts["red_cards"][k],
+                "saves": saves,
+                "bonus": zeros,
+                **actions,
+            }
+        )
+    if comp.bonus is not None:  # M10: BPS over both sides, official allocation
+        bps = np.concatenate(
+            [
+                comp.bonus.sample_bps(ev, side.position, side.player_uid, rng)
+                for ev, side in zip(all_events, fx.sides, strict=True)
+            ],
+            axis=1,
+        )
+        played_any = np.concatenate([ev["minutes"] > 0 for ev in all_events], axis=1)
+        bonus = assign_bonus_array(bps, rules.bonus.ranks, eligible=played_any)
+        split = len(fx.sides[0])
+        all_events[0]["bonus"] = bonus[:, :split].astype(np.int64)
+        all_events[1]["bonus"] = bonus[:, split:].astype(np.int64)
+    results = []
+    for k in (0, 1):
+        side, events = fx.sides[k], all_events[k]
+        position = np.broadcast_to(side.position, events["minutes"].shape)
         pts = score_arrays(events, position, rules)
         total = sum(pts.values())
         results.append(
@@ -363,6 +452,9 @@ def summarise(result: FixtureResult) -> pd.DataFrame:
             "e_goals": ev["goals_scored"].mean(axis=0),
             "e_assists": ev["assists"].mean(axis=0),
             "p_clean_sheet": ((ev["minutes"] >= 60) & (ev["goals_conceded"] == 0)).mean(axis=0),
+            "e_saves": ev["saves"].mean(axis=0),
+            "p_yellow": (ev["yellow_cards"] > 0).mean(axis=0),
+            "e_bonus": ev["bonus"].mean(axis=0),
         }
         for t in THRESHOLDS:
             frame[f"p_pts_ge_{t}"] = (pts >= t).mean(axis=0)

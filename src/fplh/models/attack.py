@@ -24,47 +24,10 @@ import numpy as np
 import pandas as pd
 
 from fplh.features.information_set import InformationSet
+from fplh.models.shrinkage import ROLE, gamma_poisson
 
-ROLE = {
-    "GK": "GK",
-    "DC": "CB",
-    "DR": "FB",
-    "DL": "FB",
-    "DMR": "FB",
-    "DML": "FB",
-    "DMC": "DM",
-    "MC": "CM",
-    "MR": "WM",
-    "ML": "WM",
-    "AMC": "AM",
-    "AMR": "W",
-    "AML": "W",
-    "FW": "FW",
-    "FWR": "FW",
-    "FWL": "FW",
-}
 QUALITY_PSEUDO_SHOTS = 20.0
 FINISHING_PSEUDO_XG = 30.0
-
-
-def _gamma_poisson(count: pd.Series, exposure: pd.Series, group: pd.Series) -> pd.Series:
-    """Posterior mean rate per player: (α_g + count) / (α_g/μ_g + exposure)."""
-    df = pd.DataFrame({"c": count, "e": exposure, "g": group})
-    out = pd.Series(np.nan, index=df.index)
-    for _, d in df.groupby("g"):
-        mu = d["c"].sum() / max(d["e"].sum(), 1e-9)
-        big = d[d["e"] >= 5]
-        if mu <= 0:
-            out[d.index] = 0.0
-            continue
-        if len(big) >= 5:
-            rates = big["c"] / big["e"]
-            between = rates.var() - (mu / big["e"]).mean()
-            alpha = float(np.clip(mu**2 / max(between, 1e-6 * mu**2), 0.5, 200.0))
-        else:
-            alpha = 5.0 * mu  # five matches of pseudo-exposure
-        out[d.index] = (alpha + d["c"]) / (alpha / mu + d["e"])
-    return out
 
 
 @dataclass
@@ -143,7 +106,7 @@ def fit_attack(info: InformationSet, half_life_days: float = 365.0) -> AttackRat
     agg["role"] = role.reindex(agg.index).fillna(agg["position"])
     group = agg["position"] + ":" + agg["role"]
 
-    shot_rate = _gamma_poisson(agg["s"], agg["e"], group)
+    shot_rate = gamma_poisson(agg["s"], agg["e"], group)
     q_group = agg.groupby(group)["x"].transform("sum") / agg.groupby(group)["s"].transform(
         "sum"
     ).clip(lower=1e-9)
@@ -159,7 +122,7 @@ def fit_attack(info: InformationSet, half_life_days: float = 365.0) -> AttackRat
             "finishing": finishing,
             "goal_rate": shot_rate * quality * finishing,
             "raw_goal_rate": agg["g"] / agg["e"].where(agg["e"] > 0),  # A5: no shrinkage
-            "assist_rate": _gamma_poisson(agg["a"], agg["e"], group),
+            "assist_rate": gamma_poisson(agg["a"], agg["e"], group),
             "pen_weight": agg["pw"],
         }
     )

@@ -573,17 +573,44 @@ def models_fit_devig(
 @evaluate_app.command("components")
 def evaluate_components(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],
+    part: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--part", help="minutes, attack, cards, saves, bonus, defence (default: all)."
+        ),
+    ] = None,
+    dc_season: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--dc-season",
+            help="Seasons with defensive counts for M7 (default 2018-19 and 2025-26, the "
+            "documented holdout exception).",
+        ),
+    ] = None,
 ) -> None:
-    """M4 minutes (Brier, ECE, A4) and M5/M6 attack (A5) walk-forward checks."""
+    """Walk-forward component checks: M4 minutes (Brier, ECE, A4), M5/M6 attack (A5), M7
+    defence, M8 saves, M9 cards and M10 bonus against their baselines."""
     import pandas as pd
 
-    from fplh.evaluate.components import evaluate_attack, evaluate_minutes
+    from fplh.evaluate import components as c
 
     lake = Lake(get_settings().lake_uri)
-    table, a4 = evaluate_minutes(lake, season)
-    a5 = evaluate_attack(lake, season)
-    with pd.option_context("display.width", 200, "display.max_columns", 20):
-        for frame in (table, a4, a5):
+    parts = part or ["minutes", "attack", "cards", "saves", "bonus", "defence"]
+    frames = []
+    if "minutes" in parts:
+        frames += list(c.evaluate_minutes(lake, season))
+    if "attack" in parts:
+        frames.append(c.evaluate_attack(lake, season))
+    if "cards" in parts:
+        frames.append(c.evaluate_cards(lake, season))
+    if "saves" in parts:
+        frames.append(c.evaluate_saves(lake, season))
+    if "bonus" in parts:
+        frames.append(c.evaluate_bonus(lake, season))
+    if "defence" in parts:
+        frames.append(c.evaluate_defence(lake, dc_season or ["2018-19", "2025-26"]))
+    with pd.option_context("display.width", 250, "display.max_columns", 20):
+        for frame in frames:
             typer.echo(frame.round(4).to_string(index=False))
 
 
