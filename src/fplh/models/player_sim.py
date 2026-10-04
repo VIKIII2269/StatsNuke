@@ -249,6 +249,8 @@ class PlayerSimulator:
         )
 
     def predict(self, info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
+        if spine.empty:
+            return spine.assign(expected_points=pd.Series(dtype=float))
         prep = self.prepare(info, spine)
         frames = []
         for fx, rules in prep.fixtures:

@@ -105,7 +105,10 @@ def evaluate_attribution(
     for season in seasons:
         for _, deadline in list(historical_deadlines(dim, season).itertuples(index=False))[::every]:
             info = InformationSet.at(deadline, store)
-            prep = sim.prepare(info, build_spine(info, 1))
+            spine = build_spine(info, 1)
+            if spine.empty:  # no fixture in the next round (as in the walk-forward runner)
+                continue
+            prep = sim.prepare(info, spine)
             for fx, rules in prep.fixtures:
                 actual = pm[pm["fixture_uid"] == fx.fixture_uid].drop_duplicates("player_uid")
                 actual = actual.set_index("player_uid")[list(ACTUAL_COLUMNS)]

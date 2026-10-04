@@ -1093,11 +1093,11 @@ The Phase 0 collector must go live first: every gameweek without snapshots is da
    - (a) *Definition-agreement test.* For 2025/26 matches, compare each candidate's per-player counts with FPL's official counts and fit a mapping. Accept a source only if its mapped counts reproduce FPL threshold crossings with a Brier score within tolerance of the model trained on 2025/26 alone.
    - (b) *Value-of-information ablation.* Compare M7 trained on 2025/26 onward against M7 trained with the backfill.
    - (c) *Evaluation.* Because 2025/26 is M7's only native training season, M7 cannot use it as a locked holdout. Evaluate M7 walk-forward within 2025/26 and on live 2026/27 instead.
-2. **Red-card and substitution timelines:** FBref basic reports versus another event source. Which has better coverage and stability?
+2. **Red-card and substitution timelines:** FBref basic reports versus another event source. Which has better coverage and stability? *Answered (Phase 3): FBref is blocked, and Understat rosters give both. Substitution minutes agree with "90 − the substitute's minutes" on all 25,787 checkable pairs, and all 580 red cards are placed; see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) §4.1.*
 3. **Lineup impact $\iota_p$:** is the first-order xG-share approximation enough, or is a regularised on/off (RAPM-style) estimate worth building?
 4. **Rank objective:** optimise for overall rank or a specific mini-league? This changes the effective-ownership inputs.
 5. **Paid data:** is historical Pinnacle odds depth or player-prop history worth paying for after Phase 4, based on measured value in A11?
-6. **Emulator inputs:** should it take more than two rates (e.g., frailty variance, team-specific state effects) as inputs?
+6. **Emulator inputs:** should it take more than two rates (e.g., frailty variance, team-specific state effects) as inputs? *Answered (Phase 3): two rates are enough for now. Frailty variance fits to about 0 (goals are not overdispersed), and team-specific state effects (G4b) were not built, because even league-level state effects are small; see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) §4.3.*
 
 ---
 
