@@ -137,46 +137,24 @@ def emulator_accuracy(
     return pd.DataFrame(rows)
 
 
-def market_reproduction(
-    emu: Emulator, prices: pd.DataFrame, n_sims: int = 50_000, seed: int = 11
-) -> pd.DataFrame:
-    """Invert de-vigged 1X2 + O/U 2.5 under the emulator model, simulate directly at the
-    implied rates, and compare with the emulator and with the market."""
-    model = emu.as_goal_model()
+def market_reproduction(models: dict[str, GoalModel], prices: pd.DataFrame) -> pd.DataFrame:
+    """§8.5.1: invert each fixture's de-vigged 1X2 + O/U 2.5 under each goal model (two
+    rates, four prices) and measure how closely the implied grid reproduces the prices.
+    The emulator's own accuracy against direct simulation is ``emulator_accuracy``."""
+    probs = prices[["p_home", "p_draw", "p_away", "p_over25"]].to_numpy(dtype=float)
     rows = []
-    p = prices.reset_index(drop=True)
-    probs = p[["p_home", "p_draw", "p_away", "p_over25"]].to_numpy(dtype=float)
-    means = [
-        model.invert(list(row[:3]), None if np.isnan(row[3]) else float(row[3])) for row in probs
-    ]
-    mu = np.array(means)
-    xh, xa = emu.nominal_for_means(mu[:, 0], mu[:, 1])
-    for start in range(0, len(p), 50):
-        sl = slice(start, start + 50)
-        sim = simulate_team(
-            emu.params, np.column_stack([np.exp(xh[sl]), np.exp(xa[sl])]), n_sims, seed + start
-        )
-        for i, (h, a) in enumerate(zip(sim.home, sim.away, strict=True)):
-            k = start + i
-            mk = markets(emu.grid_at_nominal(float(xh[k]), float(xa[k])))
-            sim_p = {
-                "home": (h > a).mean(),
-                "draw": (h == a).mean(),
-                "away": (h < a).mean(),
-                "over": (h + a > 2.5).mean(),
-            }
-            r = p.iloc[k]
-            market = {
-                "home": float(r["p_home"]),
-                "draw": float(r["p_draw"]),
-                "away": float(r["p_away"]),
-                "over": float(r["p_over25"]),
-            }
+    for name, model in models.items():
+        for uid, row in zip(prices["fixture_uid"], probs, strict=True):
+            over = None if np.isnan(row[3]) else float(row[3])
+            mk = markets(model.grid(*model.invert(list(row[:3]), over)))
+            got = np.array([mk["home"], mk["draw"], mk["away"], mk["over"]])
+            err = np.abs(got - row)
             rows.append(
                 {
-                    "fixture_uid": r.fixture_uid,
-                    "sim_vs_emulator": max(abs(sim_p[q] - mk[q]) for q in sim_p),
-                    "emulator_vs_market": float(np.nanmax([abs(mk[q] - market[q]) for q in sim_p])),
+                    "model": name,
+                    "fixture_uid": uid,
+                    "max_abs": float(np.nanmax(err)),
+                    "mean_abs": float(np.nanmean(err)),
                 }
             )
     return pd.DataFrame(rows)
@@ -344,12 +322,14 @@ def evaluate_goal_process(
         store, DevigPrices(load_devig_method()), deadlines, lake=lake, unit="fixture"
     ).predictions
     prices = prices[prices["market_available"].astype(bool)].dropna(subset=["p_home"])
-    rep = market_reproduction(emus[chosen], prices)
-    checks["market_sim_vs_emulator_share_le_0.005"] = float(
-        (rep["sim_vs_emulator"] <= 0.005).mean()
-    )
-    checks["market_emulator_vs_market_mean_abs"] = float(rep["emulator_vs_market"].mean())
-    checks["n_market_fixtures"] = len(rep)
+    rep = market_reproduction({chosen: models[chosen], "G1": models["G1"]}, prices)
+    mean_abs = rep.groupby("model")["mean_abs"].mean().to_dict()
+    max_abs = rep.groupby("model")["max_abs"].mean().to_dict()
+    checks[f"market_residual_mean_abs_{chosen}"] = float(mean_abs[chosen])
+    checks["market_residual_mean_abs_G1"] = float(mean_abs["G1"])
+    checks[f"market_residual_max_abs_{chosen}"] = float(max_abs[chosen])
+    checks["n_market_fixtures"] = int(rep["fixture_uid"].nunique())
+    checks["emulator_reference_se"] = float(np.sqrt(0.25 / 200_000))
 
     best = losses[chosen].merge(rates[["fixture_uid"]], on="fixture_uid")
     checks.update(_calibration(best))
