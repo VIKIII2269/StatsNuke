@@ -9,8 +9,9 @@ uses. The stack predicts a player-fixture's points from
 * the crowd at the deadline (``features.transfers``: owners selling, buying, ownership);
 * the latest price observed at the deadline, position and the forecast horizon.
 
-Gradient-boosted trees (shallow, heavily regularised) start from the equal blend of the
-two forecasts (``base_margin``), so with little data the stack is the blend. Walk-forward:
+Gradient-boosted trees (shallow, heavily regularised) start from the simulator's forecast
+(``base_margin``; ``StackConfig.blend`` mixes in the replica), so with little data the
+stack is the simulator. Walk-forward:
 at each deadline D the trees are trained on earlier deadlines' rows whose outcome was
 observed by D (refit every ``refit_every`` deadlines) and predict the rows at D. The base
 forecasts are themselves walk-forward, so no row ever sees its own outcome.
@@ -67,7 +68,9 @@ PARAMS: dict[str, Any] = {
 class StackConfig:
     rounds: int = 300
     refit_every: int = 4
-    blend: float = 0.5  # weight of the simulator in the starting blend
+    # weight of the simulator in the starting blend: the news-aware simulator alone beats
+    # any blend with the replica on 2021/22, so the trees start from it
+    blend: float = 1.0
     min_rows: int = 5000  # below this the stack is the blend
 
 

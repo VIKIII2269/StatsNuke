@@ -70,7 +70,7 @@ def test_stack_is_the_blend_without_enough_history() -> None:
     sim, rep, y, crowd = base()
     f = stack_frame(sim, rep, crowd, y[["player_uid", "value", "observed_at"]])
     ds = sorted(f["deadline_at"].unique())
-    out = walk_forward_stack(f, y, ds, StackConfig(min_rows=10**9))
+    out = walk_forward_stack(f, y, ds, StackConfig(min_rows=10**9, blend=0.5))
     blend = 0.5 * f["sim_ep"] + 0.5 * f["rep_ep"]
     np.testing.assert_allclose(
         out.sort_values(["deadline_at", "player_uid"])["expected_points"].to_numpy(),

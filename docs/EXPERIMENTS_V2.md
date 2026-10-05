@@ -17,8 +17,8 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 | # | Idea | Test | Result | Status |
 |---|---|---|---|---|
 | F1 | **Transfer-news minutes.** FPL round transfers (owners selling or buying) are public at the deadline and serve as a team-news proxy. They feed the minutes model, plus team-mates being sold. | M4 Brier on 2021/22 | P(start) −7.9 % [CI excludes 0], P(60+) −7.1 %, P(appear) −10.1 % | ✅ (minutes) |
-| F1b | F1 inside the full simulator | Points MSE on 2021/22 | — | ⏳ |
-| F2 | Simulator + OpenFPL replica blend | Points MSE on 2021/22 | Equal blend 4.173 vs simulator 4.194 (−0.5 %) | ✅ first look |
+| F1b | **F1 inside the full simulator** | Points MSE on 2021/22 (24,678 player-fixtures, 37 blocks) | **4.051 vs v1 4.194: −0.146 [−0.187, −0.113]; vs replica −0.164 [−0.223, −0.112]**; top-10 precision 0.456 → 0.474; Spearman (played) 0.350 → 0.363 | ✅ |
+| F2 | Simulator + OpenFPL replica blend | Points MSE on 2021/22 | Helped v1 (4.173 vs 4.194), but **hurts the news simulator**: w = 0.5 +0.036 [+0.012, +0.062], w = 0.7 +0.011 [−0.003, +0.026] | ❌ (superseded by F1b); the stack starts from the simulator alone |
 | F3 | **Stacking layer (M11 v1).** Simulator summary + replica + crowd (selling, buying, ownership) + price, as gradient-boosted trees starting from the blend. Walk-forward. | MSE, 2021/22 then 2022/23–2024/25 | Linear version −1.4 % in-sample. Needs 2017/18–2020/21 forecasts to train. | ⏳ |
 | F4 | Home/away bias fix | Fused home-goal residual vs results | +0.09, +0.08, −0.20 per season (SE 0.07): season swings, not bias | ❌ |
 | F5 | Lineup-aware team rates (G7) | Market share in fused rates | 93 % of fixtures have prices at the deadline (fusion weight 0.83); known absences are already priced | ❌ |
