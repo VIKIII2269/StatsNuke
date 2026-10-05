@@ -1,0 +1,123 @@
+module: "14"
+title: Component models M5–M10
+questions:
+  - id: q14-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, attack]
+    prompt: "Shot rate 2.5/90, xG per shot 0.14, finishing 0.95. Non-penalty goal rate per 90? (4 d.p.)"
+    answer: 0.3325
+    tolerance: 0.0002
+    check: "2.5 * 0.14 * 0.95"
+    explanation: "r · q̄ · f = 2.5 × 0.14 × 0.95 = 0.3325."
+
+  - id: q14-02
+    type: numeric
+    difficulty: 2
+    tags: [compute, allocation]
+    prompt: "On the pitch, goal rates are 0.5, 0.3, 0.1 and 0.1 (others zero). P(the 0.3 player scores a given open-play team goal)?"
+    answer: 0.3
+    tolerance: 0.001
+    check: "0.3 / (0.5 + 0.3 + 0.1 + 0.1)"
+    explanation: "0.3/1.0 = 0.30."
+
+  - id: q14-03
+    type: mcq
+    difficulty: 2
+    tags: [concepts, coherence]
+    prompt: "Why are goals allocated from team goals to players, rather than each player's goals simulated independently?"
+    options: ["Speed only", "It guarantees coherence: player goals always sum to team goals, which independent models can't", "FPL requires it", "To reduce variance"]
+    answer: B
+    explanation: Principle P3; property tests check it in every simulation.
+
+  - id: q14-04
+    type: multi
+    difficulty: 2
+    tags: [attack]
+    prompt: "Which are shrunk toward a prior in M5/M6?"
+    options: ["Shot rate (toward the position × role group)", "xG per shot (20 pseudo-shots)", "Finishing (30 pseudo-xG toward 1.0)", "Team goals"]
+    answer: [A, B, C]
+    explanation: Team goals come from the goal process, not M5.
+
+  - id: q14-05
+    type: mcq
+    difficulty: 2
+    tags: [defence, data]
+    prompt: "Tackles per 90 'doubled' between 2018/19 and 2025/26 data. What did M7 conclude and do?"
+    options: ["Players defend more now", "FPL's counting definitions changed; old counts are rescaled per (position, action) when eras differ by > 10%", "Drop old data", "Nothing"]
+    answer: B
+    explanation: "DEF CBI+T ≈ 7.5/90 in both eras: definitions changed, not football."
+
+  - id: q14-06
+    type: mcq
+    difficulty: 3
+    tags: [defence, math]
+    prompt: "Why does M7 share one Gamma frailty across a player's three action types in a match?"
+    options: ["Fewer parameters", "Busy matches are busy for all actions; shared frailty makes the group total NegBin with realistic overdispersion, which matters for threshold crossing", "To keep counts integer", "It's required by FPL"]
+    answer: B
+    explanation: Thresholds depend on the tail; correlated actions fatten it.
+
+  - id: q14-07
+    type: numeric
+    difficulty: 2
+    tags: [compute, saves]
+    prompt: "Saves model mean = (minutes/90)·g_k·(a + b·μ_opp) with a = 1.17, b = 1.24, g_k = 1. Full 90 minutes vs μ_opp = 1.5. Expected saves? (2 d.p.)"
+    answer: 3.03
+    tolerance: 0.01
+    check: "1.17 + 1.24 * 1.5"
+    explanation: "1.17 + 1.24 × 1.5 = 3.03."
+
+  - id: q14-08
+    type: mcq
+    difficulty: 2
+    tags: [saves, evidence]
+    prompt: "What carries the saves model?"
+    options: ["The keeper's individual skill multiplier", "The opponent's pre-match expected goals; the keeper multiplier (±2%) is not significant", "Realised goals in the match", "The referee"]
+    answer: B
+    explanation: "Model vs opponent-only: −0.002, CI includes 0; vs league rate: −0.049, significant."
+
+  - id: q14-09
+    type: numeric
+    difficulty: 2
+    tags: [compute, cards]
+    prompt: "Yellow rate 0.25 per 90; the player plays 60 minutes. P(yellow)? (4 d.p.)"
+    answer: 0.1535
+    tolerance: 0.0003
+    check: "1 - math.exp(-0.25 * 60 / 90)"
+    explanation: "1 − exp(−0.25 × 2/3) = 1 − e^(−0.1667) = 0.1535."
+
+  - id: q14-10
+    type: mcq
+    difficulty: 2
+    tags: [cards, leakage]
+    prompt: "Why does M9 have no referee effect?"
+    options: ["Referees don't matter", "The referee is known only after the deadline, so using it would leak", "No data", "It overfits"]
+    answer: B
+    explanation: Admissibility beats plausibility.
+
+  - id: q14-11
+    type: mcq
+    difficulty: 3
+    tags: [bonus]
+    prompt: "Why are M10's 'effective' BPS weights different from the official table (e.g. a forward's goal ≈ 23 vs 24)?"
+    options: ["Rounding", "Least squares absorbs the typical BPS of correlated actions the simulator doesn't generate into the weights of events it does", "The table is wrong", "To match bonus totals"]
+    answer: B
+    explanation: The residual δ_p carries player-specific extras like passing.
+
+  - id: q14-12
+    type: mcq
+    difficulty: 2
+    tags: [evaluation]
+    prompt: "How are component models (cards, saves, defence, bonus) evaluated?"
+    options: ["On total points", "Given the player's actual minutes (bonus given actual events), so each is judged on what it adds to the simulator", "Against ep_next", "Not evaluated"]
+    answer: B
+    explanation: Minutes errors belong to M4; conditioning isolates each component.
+
+  - id: q14-13
+    type: free
+    difficulty: 3
+    tags: [design]
+    prompt: "State the 'one component, one quantity' principle and give two benefits."
+    answer: "Each component models one real quantity with its own likelihood and metric, and components meet only in the simulator. Benefits: each is small and testable against a clear baseline; error attribution points to the component to improve; components can be upgraded independently; the simulator enforces coherence when combining them."
+    rubric: ["States the principle", "Gives a testability/validation benefit", "Gives an attribution/modularity benefit"]
+    explanation: ARCHITECTURE §7.1.

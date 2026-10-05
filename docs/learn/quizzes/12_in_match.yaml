@@ -1,0 +1,122 @@
+module: "12"
+title: In-match goal process and emulator
+questions:
+  - id: q12-01
+    type: mcq
+    difficulty: 1
+    tags: [concepts, hazards]
+    prompt: "What is a hazard (intensity) λ(t) for goals?"
+    options: ["The total goals in a match", "The instantaneous rate of goals per minute at time t, given the current state", "The probability of a goal in the whole match", "The xG of a shot"]
+    answer: B
+    explanation: Over a short slot Δ, P(goal) ≈ λ(t)Δ.
+
+  - id: q12-02
+    type: numeric
+    difficulty: 2
+    tags: [compute, hazards]
+    prompt: "A constant goal intensity of 1.8/90 per minute over 90 minutes: P(no goal)? (4 d.p.)"
+    answer: 0.1653
+    tolerance: 0.0003
+    check: "math.exp(-1.8)"
+    explanation: "exp(−Σλ·E) = exp(−1.8) = 0.1653."
+
+  - id: q12-03
+    type: mcq
+    difficulty: 3
+    tags: [math, glm]
+    prompt: "Why can a piecewise-constant hazard model be fitted as a Poisson regression?"
+    options: ["Goals are always Poisson", "In a cell with constant hazard λ and exposure E, the event-time likelihood is λ^N e^(−λE) — the Poisson likelihood of N with mean λE — so cells become Poisson rows with offset log E", "Because of the central limit theorem", "It can't; that's an approximation only"]
+    answer: B
+    explanation: The equivalence is exact for piecewise-constant hazards.
+
+  - id: q12-04
+    type: mcq
+    difficulty: 2
+    tags: [code, leakage]
+    prompt: "build_cells computes the goal difference for slot t with np.cumsum(goals, axis=2) − goals. Why subtract goals?"
+    options: ["To normalise", "The state must be the score BEFORE the slot; including the slot's own goals would let the outcome explain itself", "To get away goals", "To remove own goals"]
+    answer: B
+    explanation: A tiny off-by-one here is leakage inside the likelihood.
+
+  - id: q12-05
+    type: numeric
+    difficulty: 2
+    tags: [compute, reds]
+    prompt: "Fitted red-card effects: own red β = −0.55, opponent red β = +0.60. A team scoring at 1.4 per 90 has a player sent off. New rate per 90? (2 d.p.)"
+    answer: 0.81
+    tolerance: 0.01
+    check: "1.4 * math.exp(-0.55)"
+    explanation: "1.4 × e^(−0.55) = 1.4 × 0.577 = 0.81; their opponents' rate rises × e^0.60 ≈ 1.82."
+
+  - id: q12-06
+    type: mcq
+    difficulty: 3
+    tags: [math, frailty]
+    prompt: "Why did the code use a Gamma frailty instead of the spec's log-normal?"
+    options: ["It is more realistic", "Gamma integrates out exactly with Poisson counts, giving a closed-form likelihood and gradient; log-normal would need quadrature", "Log-normal can't have mean 1", "NumPyro requires Gamma"]
+    answer: B
+    explanation: Same role (shared match-level noise), but tractable.
+
+  - id: q12-07
+    type: mcq
+    difficulty: 2
+    tags: [evidence, dispersion]
+    prompt: "What was found about frailty and dispersion of EPL goals?"
+    options: ["Strong overdispersion", "Frailty variance ≈ 0; Pearson φ 0.77–1.11, below 1 in 5 of 7 seasons — not overdispersed given strength", "Negative binomial fits best", "Goals are Binomial"]
+    answer: B
+    explanation: Mixing teams of different strength creates apparent overdispersion; conditional on strength it vanishes.
+
+  - id: q12-08
+    type: mcq
+    difficulty: 2
+    tags: [model]
+    prompt: "What does G6 add over G5?"
+    options: ["Penalties", "Game-state effects estimated from non-penalty shots (~10× the events), plus a shrunk per-state conversion offset", "Weather", "Player ratings"]
+    answer: B
+    explanation: Goals are rare; shots respond to game state similarly and pin the effects down.
+
+  - id: q12-09
+    type: mcq
+    difficulty: 2
+    tags: [evidence, selection]
+    prompt: "No G-level significantly beat G0 on pre-match scorelines. Which does the simulator use, and why?"
+    options: ["G0, because it's simplest", "G6: the simulator needs in-match dynamics, so it takes the highest level not significantly worse than its predecessor", "G4 randomly", "None"]
+    answer: B
+    explanation: G0 stays the pre-match default; G6 drives player events in the simulator.
+
+  - id: q12-10
+    type: mcq
+    difficulty: 2
+    tags: [emulator]
+    prompt: "What is the emulator for?"
+    options: ["Plotting", "A cheap smooth surrogate of the simulator's outputs as functions of nominal rates, so market inversion can find nominal rates for target mean goals", "Replacing the rules engine", "Training XGBoost"]
+    answer: B
+    explanation: Grid of simulations → bicubic splines → 2-D Newton inversion, cached by parameter hash.
+
+  - id: q12-11
+    type: mcq
+    difficulty: 3
+    tags: [emulator, monte-carlo]
+    prompt: "Why does the emulator run every grid point with the same seed?"
+    options: ["Reproducibility only", "Common random numbers make outputs vary smoothly between neighbouring grid points, so splines and Newton derivatives aren't fooled by Monte Carlo noise", "To save memory", "It's a bug"]
+    answer: B
+    explanation: Differences between nearby points then reflect the rates, not sampling noise.
+
+  - id: q12-12
+    type: free
+    difficulty: 3
+    tags: [evidence, honesty]
+    prompt: "In-play next-goal ECE for 'away' was 0.024 against a 0.02 target. Summarise how the repo handled this."
+    answer: "It reported the miss, checked it was real (a perfectly calibrated forecaster scores ≤ 0.018 at the 95th percentile on these forecasts), looked for a missing model term (training residuals by side × time and side × goal difference were all |z| < 1.4), and concluded it's a shift in the tuning seasons (away teams score relatively more late on), leaving a refit or side × time term as an open item."
+    rubric: ["Miss reported, not hidden", "Checked against what noise alone would produce", "Searched residuals for a missing term; concluded a period shift and left an open item"]
+    explanation: That is what honest model validation looks like.
+
+  - id: q12-13
+    type: numeric
+    difficulty: 2
+    tags: [compute, frailty]
+    prompt: "With Gamma frailty shape a = 10 and conditional mean μ = 2.5 goals, what is Var(N)? (2 d.p.)"
+    answer: 3.125
+    tolerance: 0.006
+    check: "2.5 + 2.5**2 / 10"
+    explanation: "Var = μ + μ²/a = 2.5 + 0.625 = 3.125."

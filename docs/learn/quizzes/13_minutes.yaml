@@ -1,0 +1,113 @@
+module: "13"
+title: Minutes with XGBoost (M4)
+questions:
+  - id: q13-01
+    type: mcq
+    difficulty: 1
+    tags: [evidence, concepts]
+    prompt: "Which component is the largest REDUCIBLE source of the simulator's error?"
+    options: ["Bonus", "Minutes (≈ 23% of MSE; naive minutes costs +0.200)", "Cards", "Saves"]
+    answer: B
+    explanation: Goal events are ~73% but mostly irreducible luck; minutes is reducible with better information.
+
+  - id: q13-02
+    type: numeric
+    difficulty: 1
+    tags: [compute, stages]
+    prompt: "π^S = 0.6, π^B = 0.25. P(the player appears)? (3 d.p.)"
+    answer: 0.7
+    tolerance: 0.001
+    check: "0.6 + 0.4 * 0.25"
+    explanation: "π^S + (1 − π^S)π^B = 0.6 + 0.1 = 0.70."
+
+  - id: q13-03
+    type: mcq
+    difficulty: 2
+    tags: [concepts, stages]
+    prompt: "Why model minutes as three conditional stages instead of one minutes regression?"
+    options: ["Fewer parameters", "Each stage is a simpler question with cleanly labelled data (start; 60+ given start; appear given bench), and they combine by probability rules", "XGBoost can't do regression", "To save time"]
+    answer: B
+    explanation: Decomposition into conditionals matches the structure of football selection.
+
+  - id: q13-04
+    type: numeric
+    difficulty: 2
+    tags: [compute, boosting]
+    prompt: "Log-loss boosting: a row has p = 0.25 and y = 1. Gradient g = p − y?"
+    answer: -0.75
+    tolerance: 0.0001
+    check: "0.25 - 1"
+    explanation: Negative gradient → the next tree pushes this row's log-odds up.
+
+  - id: q13-05
+    type: numeric
+    difficulty: 3
+    tags: [compute, boosting]
+    prompt: "A leaf holds rows with g = (−0.75, 0.2) and h = (0.1875, 0.16), λ = 1. Optimal leaf value? (3 d.p.)"
+    answer: 0.408
+    tolerance: 0.002
+    check: "-(-0.75 + 0.2) / (0.1875 + 0.16 + 1)"
+    explanation: "−Σg/(Σh + λ) = −(−0.55)/(0.3475 + 1) = 0.55/1.3475 = 0.408."
+
+  - id: q13-06
+    type: mcq
+    difficulty: 2
+    tags: [boosting]
+    prompt: "What does a small learning rate (eta = 0.05) with many trees achieve?"
+    options: ["Faster training", "Each tree contributes a little, so the ensemble averages out noise and overfits less", "Monotonicity", "Calibration"]
+    answer: B
+    explanation: Shrinkage is a regulariser for boosting.
+
+  - id: q13-07
+    type: mcq
+    difficulty: 2
+    tags: [constraints]
+    prompt: "Why impose monotone constraints on h_started_* and chance_of_playing?"
+    options: ["Speed", "Domain knowledge: more recent starts or better fitness must never lower P(start); unconstrained trees can invert in sparse regions", "XGBoost requires it", "To calibrate"]
+    answer: B
+    explanation: "Cheap robustness: forecasts stay sensible where data are thin."
+
+  - id: q13-08
+    type: mcq
+    difficulty: 2
+    tags: [calibration]
+    prompt: "Isotonic regression fits…"
+    options: ["A straight line", "The least-squares non-decreasing step function from raw scores to outcomes (via pool-adjacent-violators)", "A sigmoid", "A tree"]
+    answer: B
+    explanation: It preserves ranking and fixes calibration.
+
+  - id: q13-09
+    type: mcq
+    difficulty: 3
+    tags: [calibration, leakage]
+    prompt: "In fit_stage, why is the calibrator fit on the chronologically last 20% using a model trained on the first 80%?"
+    options: ["To save memory", "Calibration must be learned on out-of-sample predictions; in-sample ones are overconfident. Chronological split mimics live use.", "Because XGBoost needs it", "It's arbitrary"]
+    answer: B
+    explanation: Then the final model is retrained on all rows and the held-out map is applied.
+
+  - id: q13-10
+    type: mcq
+    difficulty: 2
+    tags: [missing-data]
+    prompt: "How is chance_of_playing handled for seasons before the repo's own captures?"
+    options: ["Imputed as 100", "Imputed as the mean", "Left missing; XGBoost learns a default direction for missing values", "Rows dropped"]
+    answer: C
+    explanation: Imputing would fabricate information; missing-as-its-own-case is honest (spec gap 1).
+
+  - id: q13-11
+    type: mcq
+    difficulty: 3
+    tags: [evidence, eras]
+    prompt: "Why does π^B get a logit shift per substitution limit (3 vs 5 subs)?"
+    options: ["To match FPL rules", "Trees can't extrapolate to an era absent from features; the shift moves each era's mean predicted appearance rate to the rate observed on that era's own rows", "To reduce variance", "To enforce monotonicity"]
+    answer: B
+    explanation: Measuring on the era's own rows brought 2022/23's mean π^B to 0.169 vs 0.163 observed.
+
+  - id: q13-12
+    type: free
+    difficulty: 3
+    tags: [evidence, design]
+    prompt: "Why did the repo drop per-team normalisation of start probabilities (scaling each team's π^S to sum to 11)?"
+    answer: "Because the deadline squad list includes departed and long-term-absent players. Forcing the sum to 11 over that list redistributes probability to/from players who won't play, biasing everyone's π^S. The calibrated per-player model was more accurate without it."
+    rubric: ["Squad lists include players who won't play (departed/injured)", "Normalising over them distorts probabilities", "Calibrated individual probabilities were better"]
+    explanation: A plausible constraint can hurt if the population it's applied to is wrong.

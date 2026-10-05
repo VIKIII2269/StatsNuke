@@ -1,0 +1,112 @@
+module: "15"
+title: Monte Carlo simulation
+questions:
+  - id: q15-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, monte-carlo]
+    prompt: "Points sd 3 with S = 10,000 simulations. SE of the expected points estimate?"
+    answer: 0.03
+    tolerance: 0.0005
+    check: "3 / math.sqrt(10000)"
+    explanation: "s/√S = 3/100 = 0.03."
+
+  - id: q15-02
+    type: numeric
+    difficulty: 2
+    tags: [compute, monte-carlo]
+    prompt: "P(haul) estimated as 0.04 from S = 2,500 simulations. Its SE? (4 d.p.)"
+    answer: 0.0039
+    tolerance: 0.0002
+    check: "math.sqrt(0.04 * 0.96 / 2500)"
+    explanation: "√(0.04 × 0.96 / 2500) = 0.0039."
+
+  - id: q15-03
+    type: mcq
+    difficulty: 1
+    tags: [monte-carlo]
+    prompt: "To halve the Monte Carlo standard error, you need…"
+    options: ["2× the simulations", "4× the simulations", "√2× the simulations", "Half the simulations"]
+    answer: B
+    explanation: SE ∝ 1/√S.
+
+  - id: q15-04
+    type: multi
+    difficulty: 2
+    tags: [concepts]
+    prompt: "Which make simulation necessary rather than summing component expectations?"
+    options: ["Clean sheets depend jointly on minutes and goal timing", "Bonus is a ranking across all players in the match", "Thresholds (saves per 3, defensive actions ≥ 10)", "Expectation is not linear"]
+    answer: [A, B, C]
+    explanation: Expectation IS linear; the problem is that the rules are non-linear joint functions of random events, and decisions need distributions.
+
+  - id: q15-05
+    type: mcq
+    difficulty: 2
+    tags: [sampling]
+    prompt: "What does systematic sampling give that independent Bernoulli(π^S) draws don't?"
+    options: ["Faster draws", "A fixed number of starters (1 GK + 10 outfield) while keeping each player's inclusion probability exactly π^S", "Higher probabilities for stars", "Correlation between teams"]
+    answer: B
+    explanation: Independent draws give random squad sizes.
+
+  - id: q15-06
+    type: mcq
+    difficulty: 3
+    tags: [sampling, code]
+    prompt: "In systematic_sample, why are players shuffled into a random order first?"
+    options: ["To speed up cumsum", "So joint selections vary randomly; marginals stay exact, but a fixed order would make certain player combinations impossible or forced", "To break ties", "It is not needed"]
+    answer: B
+    explanation: The comb is evenly spaced, so with a fixed order neighbours' selections are rigidly linked.
+
+  - id: q15-07
+    type: numeric
+    difficulty: 3
+    tags: [compute, sampling]
+    prompt: "Weights 0.4, 0.8, 0.8 (sum 2) laid end to end in that order, comb offset u = 0.5 (teeth at 0.5 and 1.5). How many of the three players are picked, and which? Answer with the index sum (0-based)."
+    answer: 3
+    tolerance: 0
+    explanation: "Segments: [0, 0.4), [0.4, 1.2), [1.2, 2.0). Teeth at 0.5 → player 1, at 1.5 → player 2. Picked: 1 and 2 → index sum 3."
+
+  - id: q15-08
+    type: mcq
+    difficulty: 2
+    tags: [crn]
+    prompt: "Why do common random numbers reduce the variance of a difference between two decisions?"
+    options: ["They reduce each estimate's variance", "Var(a − b) = Var a + Var b − 2Cov(a, b), and shared draws make Cov large and positive", "They remove bias", "They make simulations faster"]
+    answer: B
+    explanation: Same idea as paired comparisons in evaluation.
+
+  - id: q15-09
+    type: mcq
+    difficulty: 2
+    tags: [testing]
+    prompt: "Which is a property test of the simulator?"
+    options: ["Expected points of strikers exceed 4", "Player goals + opponents' own goals equal team goals in every simulation", "The simulator beats OpenFPL", "Runtime under 1 s"]
+    answer: B
+    explanation: Coherence invariants must hold for every input; performance against baselines is evaluation, not a property.
+
+  - id: q15-10
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "What did the Phase 3 exit gate find for simulator − OpenFPL replica (MSE)?"
+    options: ["+0.029, worse", "−0.029, CI [−0.048, −0.011]: passes, but a narrow 0.8% margin, and 2024/25 alone is a tie", "−0.4, huge", "Not significant"]
+    answer: B
+    explanation: The plan stresses the narrowness honestly; MAE, ranking and top-10 precision improve more clearly.
+
+  - id: q15-11
+    type: mcq
+    difficulty: 3
+    tags: [attribution]
+    prompt: "How does error attribution split y − ŷ⁰ exactly into minutes, goal events and the rest?"
+    options: ["Regression of errors on features", "Rerun the simulator with actual minutes forced (ŷ¹), then also actual goal events (ŷ²); the differences telescope: (ŷ¹−ŷ⁰)+(ŷ²−ŷ¹)+(y−ŷ²)", "SHAP values", "Bootstrap"]
+    answer: B
+    explanation: Forcing outcomes in the same simulator makes the parts sum to the error on every row.
+
+  - id: q15-12
+    type: free
+    difficulty: 2
+    tags: [validation]
+    prompt: "Why check calibration guardrails such as P(60+) and P(haul ≥ 10) in addition to MSE?"
+    answer: "MSE judges the mean only. Decisions use probabilities and tails (captaincy upside, risk, minutes certainty); a model can have good mean accuracy but wrong spread, e.g. too few hauls. Guardrails confirm the distribution is right: P(60+) 0.2825 vs 0.2819, P(haul) 0.0167 vs 0.0164."
+    rubric: ["MSE only covers the mean", "Decisions depend on probabilities/tails", "Guardrails check distributional calibration"]
+    explanation: The simulator outputs a pmf; its shape must be right too.
