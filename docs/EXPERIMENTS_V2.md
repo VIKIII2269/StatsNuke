@@ -63,7 +63,16 @@ D1: 2021/22 replay with the v1 simulator (repeat mode), one setting changed at a
 **Reading:**
 - Shorter or more discounted planning takes fewer hits and scores more.
 - But δ 0.8 and δ 1.0 both beat δ 0.9, so a single season is noisy (about ±100 points).
-- ⏳ Adopt only if the winners (horizon 3, δ 0.8) also win on the 2022/23–2024/25 replay.
+- **Test seasons** (v1 simulator, horizon-5 forecasts, 2022/23 + 2023/24 + 2024/25):
+
+  | Setting | 2022/23 | 2023/24 | 2024/25 | Total | vs default |
+  |---|---|---|---|---|---|
+  | default | 2,272 | 2,384 | 2,300 | 6,956 | — |
+  | horizon 3 | 2,222 | 2,364 | 2,278 | 6,864 | −92 |
+  | δ 0.8 | 2,293 | 2,317 | 2,335 | 6,945 | −11 |
+
+  Hits fall to 30 and 22 (from 39), but points do not rise.
+- ❌ **Not adopted:** the 2021/22 gains were noise. The defaults stay.
 
 ## Tonight's queue (in order)
 
@@ -72,7 +81,7 @@ D1: 2021/22 replay with the v1 simulator (repeat mode), one setting changed at a
 3. 🔜 F8: per-position stack weights; the stack's calibration of P(haul) and ranking (top-10 precision, used by the optimiser).
 4. 🔜 Season replay with v2 forecasts (simulator with news at horizon 5, stacked). Does v2 pass the Phase 4 gate against the replica?
 5. 🔜 B7: live consensus paper tracker on The Odds API snapshots (about 10–15 UK books), logged per gameweek as data arrives.
-6. ⏳ D1: optimiser tuning on the 2021/22 replay (bench weight β, discount δ, horizon 3/5/8, chip thresholds ×0.5/×1.5), applied unchanged to the test seasons.
+6. ❌ D1 (done; defaults kept): optimiser tuning on the 2021/22 replay (bench weight β, discount δ, horizon 3/5/8, chip thresholds ×0.5/×1.5), applied unchanged to the test seasons.
 7. 🔜 F9: card memory 730 d and one season of BPS weights (small known gains from the Phase 3 tuning).
 8. 🔜 Docs, PR, merge on green CI.
 
