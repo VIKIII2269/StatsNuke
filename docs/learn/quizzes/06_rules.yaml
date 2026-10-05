@@ -1,0 +1,119 @@
+module: "06"
+title: Rules as data
+questions:
+  - id: q06-01
+    type: numeric
+    difficulty: 1
+    tags: [fpl, compute]
+    prompt: "2025/26 rules: a defender plays 90 minutes, scores once, his team concedes 0 while he is on. Points (no bonus, no defensive contribution)?"
+    answer: 12
+    tolerance: 0
+    explanation: "Appearance 2 + DEF goal 6 + DEF clean sheet 4 = 12."
+
+  - id: q06-02
+    type: numeric
+    difficulty: 2
+    tags: [fpl, compute]
+    prompt: "A goalkeeper plays 90 minutes, concedes 5, makes 7 saves and saves a penalty. Points (2025/26, no bonus)?"
+    answer: 7
+    tolerance: 0
+    explanation: "Appearance 2 + saves 7//3 = 2 + penalty save 5 − conceded 5//2 = 2 → 2 + 2 + 5 − 2 = 7."
+
+  - id: q06-03
+    type: mcq
+    difficulty: 2
+    tags: [fpl, rules]
+    prompt: "A defender plays 55 minutes and his team concedes 0 in the whole match. Clean sheet points?"
+    options: ["4", "2", "0", "1"]
+    answer: C
+    explanation: Clean sheets need at least 60 minutes (min_minutes 60).
+
+  - id: q06-04
+    type: mcq
+    difficulty: 2
+    tags: [fpl, bonus]
+    prompt: "BPS in a match: 38, 32, 32, 29. Bonus awarded?"
+    options: ["3, 2, 2, 0", "3, 2, 1, 0", "3, 2, 2, 1", "3, 1, 1, 0"]
+    answer: A
+    explanation: Competition ranks 1, 2, 2, 4 → 3, 2, 2, 0. A tie for second gives both 2 and no third place.
+
+  - id: q06-05
+    type: mcq
+    difficulty: 1
+    tags: [code, design]
+    prompt: "Why does rules/config.py use pydantic with extra='forbid'?"
+    options: ["For speed", "A typo'd or unknown key makes the config fail to load instead of being silently ignored", "To allow extra keys", "To serialise to JSON"]
+    answer: B
+    explanation: Wrong configs should be unloadable. Values still marked VERIFY are rejected too.
+
+  - id: q06-06
+    type: mcq
+    difficulty: 2
+    tags: [testing]
+    prompt: "What is a golden test in this repo?"
+    options: ["A test that always passes", "Feeding official per-player events into the engine and demanding the official total_points exactly, for every player-fixture", "A benchmark of speed", "A test written first"]
+    answer: B
+    explanation: 0 mismatches on 254,119 player-fixtures, 2016/17–2026/27.
+
+  - id: q06-07
+    type: mcq
+    difficulty: 2
+    tags: [testing]
+    prompt: "What does Hypothesis do when a property test fails?"
+    options: ["Retries until it passes", "Shrinks the failing input to a minimal counterexample", "Skips the test", "Increases tolerance"]
+    answer: B
+    explanation: Shrinking turns a messy random failure into the smallest case that still breaks the property.
+
+  - id: q06-08
+    type: multi
+    difficulty: 2
+    tags: [testing]
+    prompt: "Which are properties (invariants) tested in the repo?"
+    options: ["Row order doesn't change each row's score", "Scoring two frames together equals scoring them separately (DGWs are sums)", "Player goals + opponents' own goals = team goals in every simulation", "Expected points exceed 5 for forwards", "Exactly 11 starters with one GK"]
+    answer: [A, B, C, E]
+    explanation: Properties hold for every valid input; 'forwards average > 5' is not an invariant.
+
+  - id: q06-09
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "How was the penalty-save BPS change (15 → 8) discovered?"
+    options: ["Reading the FPL website", "Regressing official BPS on events (fplh rules check-bps): ~8.9 in 2024/25, ~7.0 in 2025/26", "From a user report", "From Understat"]
+    answer: B
+    explanation: Data revealed a rule change before the documentation did.
+
+  - id: q06-10
+    type: mcq
+    difficulty: 1
+    tags: [code]
+    prompt: "Why does score_arrays return a breakdown per component rather than only a total?"
+    options: ["It is required by pandas", "So mismatches and forecast errors can be attributed to specific rules/events", "To use more memory", "For the MILP"]
+    answer: B
+    explanation: Attribution and debugging need to know which component disagrees.
+
+  - id: q06-11
+    type: mcq
+    difficulty: 2
+    tags: [code, numpy]
+    prompt: "assign_bonus_array sets non-playing players' BPS to −∞ before ranking. Why?"
+    options: ["To give them negative bonus", "So they never rank and never push a playing player down", "To speed up sorting", "Because NaN breaks comparisons"]
+    answer: B
+    explanation: Bonus is only for players who played; excluding them from ranking keeps others' ranks correct.
+
+  - id: q06-12
+    type: free
+    difficulty: 3
+    tags: [design]
+    prompt: "Argue why the rules engine must be exact while the rest of the system is probabilistic."
+    answer: "Downstream errors combine: if the scorer is slightly wrong, every simulated and evaluated point inherits a systematic bias that is invisible inside model noise and can't be detected by forecasting metrics. Rules are deterministic and fully observable, so exactness is achievable and verifiable (golden tests); making the base exact means all remaining error is genuinely about forecasting."
+    rubric: ["Notes systematic errors propagate into everything downstream", "Such bias would be hidden in model error", "Rules are deterministic, so exactness is achievable and testable"]
+    explanation: An exact foundation lets you attribute error honestly.
+
+  - id: q06-13
+    type: mcq
+    difficulty: 2
+    tags: [fpl, rules]
+    prompt: "With auto-subs, which bench player replaces a starting goalkeeper who didn't play?"
+    options: ["The first outfield bench player", "Only the substitute goalkeeper", "Nobody; the slot scores 0 always", "The vice-captain"]
+    answer: B
+    explanation: A goalkeeper can only be replaced by the substitute goalkeeper (rules/team.py), keeping exactly one GK in the XI.

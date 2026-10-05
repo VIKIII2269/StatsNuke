@@ -1,0 +1,129 @@
+module: "05"
+title: The data platform
+questions:
+  - id: q05-01
+    type: mcq
+    difficulty: 1
+    tags: [data, concepts]
+    prompt: "Which property defines the bronze layer?"
+    options: ["Typed Parquet, rebuilt nightly", "Raw bytes as received plus metadata, create-only (never overwritten)", "Only the latest snapshot per endpoint", "Model predictions"]
+    answer: B
+    explanation: Bronze keeps every response byte-for-byte with a SHA-256 sidecar; nothing may overwrite or delete it, so silver can always be rebuilt.
+
+  - id: q05-02
+    type: multi
+    difficulty: 2
+    tags: [data, concepts]
+    prompt: "Why keep raw bronze forever? (select all)"
+    options: ["Parser bugs can be fixed by rebuilding silver", "FPL status/news/prices are current-state only and lost if not snapshotted", "Hashes let corruption be detected", "It makes models train faster", "It is required by FPL's terms"]
+    answer: [A, B, C]
+    explanation: Rebuildability, irreplaceable snapshots and auditability. Speed and terms of service are not the reasons.
+
+  - id: q05-03
+    type: mcq
+    difficulty: 1
+    tags: [data, time]
+    prompt: "What is o_f (observed_at) for a backfilled fact?"
+    options: ["The download time today", "The event time", "The event time plus the source's conservative publication lag", "The next deadline"]
+    answer: C
+    explanation: Download time is meaningless for history, so o_f = e_f + ℓ_s with lags from configs/sources.yaml (FPL 33 h, Understat 24 h, football-data 48 h).
+
+  - id: q05-04
+    type: mcq
+    difficulty: 2
+    tags: [data, time]
+    prompt: "A match ends Saturday 17:00 UTC (kickoff 15:00). Understat lag is 24 h from kickoff. The deadline is Sunday 13:30 UTC. Can its shots be used?"
+    options: ["Yes, the match finished before the deadline", "No, observed_at = Sunday 15:00 > deadline", "Yes, if xG is rounded", "Only for goalkeepers"]
+    answer: B
+    explanation: Admissibility depends on o_f, not on when the event happened.
+
+  - id: q05-05
+    type: mcq
+    difficulty: 2
+    tags: [data, leakage, code]
+    prompt: "Why does InformationSet expose dim_fixture without home_goals and away_goals?"
+    options: ["To save memory", "Dimension tables have no observation time, so outcomes there would be visible at every deadline", "Because they are often missing", "Because DuckDB cannot read them"]
+    answer: B
+    explanation: Only schedule and identity columns are knowable in advance; outcomes must come from time-indexed facts.
+
+  - id: q05-06
+    type: mcq
+    difficulty: 2
+    tags: [data, leakage]
+    prompt: "What does the future-shuffle test do?"
+    options: ["Shuffles training rows for SGD", "Scrambles every row observed after D and checks features at D are unchanged", "Randomises deadlines", "Drops future columns"]
+    answer: B
+    explanation: Any feature that changes depended on the future, whatever back door it used. It blocks CI.
+
+  - id: q05-07
+    type: mcq
+    difficulty: 2
+    tags: [data, testing]
+    prompt: "Why does the repo include a deliberately leaky builder in its tests?"
+    options: ["To benchmark speed", "To prove the leakage check actually catches leaks (a test of the test)", "For backwards compatibility", "It is dead code"]
+    answer: B
+    explanation: A check that can never fail is worthless; test_a_leaky_builder_is_caught shows it fires.
+
+  - id: q05-08
+    type: mcq
+    difficulty: 1
+    tags: [data, joins]
+    prompt: "Snapshots for a player at 09:00 (price 7.5), 10:30 (7.6) and 12:00 (7.7). Deadline 11:00. What does the as-of join return?"
+    options: ["7.5", "7.6", "7.7", "The average"]
+    answer: B
+    explanation: The latest fact observed at or before the spine time.
+
+  - id: q05-09
+    type: numeric
+    difficulty: 1
+    tags: [data, compute]
+    prompt: "A round's first kickoff is 14:00. At what hour (24h clock, decimal) is the FPL deadline the code uses?"
+    answer: 12.5
+    tolerance: 0.01
+    check: "14 - 1.5"
+    explanation: "Deadline = first kickoff − 90 minutes = 12:30, i.e. 12.5."
+
+  - id: q05-10
+    type: mcq
+    difficulty: 2
+    tags: [data, entities]
+    prompt: "Why did player linking switch from summed-minutes agreement to appearance overlap (Jaccard)?"
+    options: ["Jaccard is faster", "Sources count substitute minutes differently (~1 min per appearance) and cover different windows, so minutes checks vetoed correct links", "Minutes were missing", "Jaccard handles accents"]
+    answer: B
+    explanation: Overlap of fixtures played, over fixtures both sources cover, is independent evidence robust to counting conventions.
+
+  - id: q05-11
+    type: mcq
+    difficulty: 2
+    tags: [data, entities]
+    prompt: "A candidate pair has name score 86, overlap 0.97 over 5 shared fixtures. Decision?"
+    options: ["auto", "review", "none", "override"]
+    answer: A
+    explanation: "Score 80–92 with overlap ≥ 0.95 over ≥ 3 shared fixtures is corroborated → auto."
+
+  - id: q05-12
+    type: mcq
+    difficulty: 2
+    tags: [data, quality]
+    prompt: "What must an entry in configs/quality/exceptions.yaml contain?"
+    options: ["Nothing; it is a free-form allowlist", "A written reason (evidence), otherwise loading raises", "A GitHub issue number", "A model version"]
+    answer: B
+    explanation: Every excused upstream defect is documented; silent swallowing is not allowed.
+
+  - id: q05-13
+    type: free
+    difficulty: 3
+    tags: [data, leakage]
+    prompt: "Before 2020/21, vaastav rows lack the player's team. Why would using players_raw.team instead leak, and what does the repo do?"
+    answer: "players_raw.team is the player's END-OF-SEASON club, so a player who transferred mid-season would be attributed to his future club for earlier matches — information not knowable at those deadlines. The repo takes the team from the fixture (the side the player appeared for)."
+    rubric: ["players_raw.team reflects end-of-season state", "Using it attributes future transfers to past matches (leak)", "Team is taken from the fixture instead"]
+    explanation: Subtle leakage often hides in 'static' tables that are really snapshots of a later time.
+
+  - id: q05-14
+    type: mcq
+    difficulty: 3
+    tags: [data, quality]
+    prompt: "football-data files before 2019/20 have no kickoff time. What went wrong when 15:00 was imputed?"
+    options: ["Nothing", "Midweek/holiday prices looked post-kickoff and became unusable; real kickoffs now come from FPL/Understat", "Odds became negative", "Matches were duplicated"]
+    answer: B
+    explanation: Imputation silently interacts with time rules. The pre-match observation rule is also capped at kickoff − 1 h.

@@ -1,0 +1,134 @@
+module: "04"
+title: Bayes and shrinkage
+questions:
+  - id: q04-01
+    type: mcq
+    difficulty: 1
+    tags: [math, bayes]
+    prompt: "Bayes' rule in words is:"
+    options: ["prior ∝ posterior × likelihood", "posterior ∝ likelihood × prior", "likelihood ∝ prior / posterior", "posterior = likelihood + prior"]
+    answer: B
+    explanation: P(H | D) = P(D | H) P(H) / P(D). The denominator only normalises.
+
+  - id: q04-02
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, bayes]
+    prompt: "Prior: 20% of midfielders are 'set-piece takers' (shot rate 3/90), the rest 1.5/90. A new midfielder takes 4 shots in one 90. Posterior probability he's a set-piece taker? (3 d.p.)"
+    answer: 0.472
+    tolerance: 0.003
+    check: "(0.2*stats.poisson.pmf(4,3))/(0.2*stats.poisson.pmf(4,3)+0.8*stats.poisson.pmf(4,1.5))"
+    explanation: "P(4|3) = 0.168, P(4|1.5) = 0.047. Posterior = 0.2·0.168 / (0.2·0.168 + 0.8·0.047) = 0.0336 / 0.0713 ≈ 0.472."
+
+  - id: q04-03
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, shrinkage]
+    prompt: "Prior Gamma(α = 4, α/μ) with group mean μ = 2 shots/90. A player has 9 shots in 2 matches. Posterior mean shot rate?"
+    answer: 3.25
+    tolerance: 0.005
+    check: "(4 + 9) / (4 / 2 + 2)"
+    explanation: "(α + S)/(α/μ + u) = 13/4 = 3.25, between the raw 4.5 and the prior 2.0."
+
+  - id: q04-04
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, shrinkage]
+    prompt: "Same prior (α = 4, μ = 2). What weight w does a player with 6 matches of exposure put on his own raw rate? (3 d.p.)"
+    answer: 0.75
+    tolerance: 0.002
+    check: "6 / (6 + 4 / 2)"
+    explanation: "w = u/(u + α/μ) = 6/(6 + 2) = 0.75. The prior is worth 2 matches."
+
+  - id: q04-05
+    type: mcq
+    difficulty: 2
+    tags: [math, conjugacy]
+    prompt: "Why is the Gamma prior called conjugate to the Poisson likelihood?"
+    options: ["It is the only valid prior", "The posterior is again a Gamma, so updating is just adding counts and exposure", "It makes the likelihood Normal", "It has no parameters"]
+    answer: B
+    explanation: "Prior r^(α−1)e^(−βr) × likelihood r^S e^(−ur) = r^(α+S−1) e^(−(β+u)r): Gamma(α+S, β+u). No optimiser or sampling needed."
+
+  - id: q04-06
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, mom]
+    prompt: "In a group, μ = 1.5, the variance of observed player rates is 0.40, and the mean Poisson noise μ/u is 0.25. Method-of-moments α?"
+    answer: 15
+    tolerance: 0.01
+    check: "1.5**2 / (0.40 - 0.25)"
+    explanation: "between = 0.40 − 0.25 = 0.15; α = μ²/between = 2.25/0.15 = 15."
+
+  - id: q04-07
+    type: mcq
+    difficulty: 2
+    tags: [math, mom]
+    prompt: "If players in a group are nearly identical in true skill, the method of moments gives…"
+    options: ["A small α and weak shrinkage", "A large α and strong shrinkage toward the group mean", "α = 0", "An error"]
+    answer: B
+    explanation: "Small between-player variance → α = μ²/between is large → a strong prior. The code clips α to [0.5, 200]."
+
+  - id: q04-08
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, shrinkage]
+    prompt: "Finishing is shrunk as (goals + 30)/(xG + 30). A player scored 15 non-penalty goals from 10 xG. Estimated finishing multiplier? (3 d.p.)"
+    answer: 1.125
+    tolerance: 0.002
+    check: "(15 + 30) / (10 + 30)"
+    explanation: "45/40 = 1.125, not the raw 1.5. Finishing skill is weak and slow to detect, so the prior (f = 1) is strong."
+
+  - id: q04-09
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, decay]
+    prompt: "With a 365-day half-life, what weight does a match from 547.5 days ago get? (3 d.p.)"
+    answer: 0.354
+    tolerance: 0.002
+    check: "2 ** (-547.5 / 365)"
+    explanation: "2^(−1.5) = 0.354."
+
+  - id: q04-10
+    type: mcq
+    difficulty: 2
+    tags: [evidence, shrinkage]
+    prompt: "In ablation A5, where did shrinkage help most?"
+    options: ["Established starters", "Players with under 10 decayed 90s of history (log loss 0.220 vs 0.449)", "Goalkeepers", "Nowhere significantly"]
+    answer: B
+    explanation: Shrinkage matters most where data are thinnest; for all players it still helped (0.269 vs 0.349).
+
+  - id: q04-11
+    type: mcq
+    difficulty: 1
+    tags: [concepts, shrinkage]
+    prompt: "What does 'partial pooling' mean?"
+    options: ["Every player gets the league average", "Every player is estimated alone", "Each estimate is a data-weighted compromise between the player's own data and the group", "Pooling only half the seasons"]
+    answer: C
+    explanation: No pooling is too noisy, complete pooling ignores real differences; the posterior mean balances them by exposure.
+
+  - id: q04-12
+    type: mcq
+    difficulty: 2
+    tags: [code, shrinkage]
+    prompt: "What does shrinkage.gamma_poisson do for a group with fewer than 5 players having ≥ 5 90s?"
+    options: ["Skips the group", "Uses α = 5μ, i.e. five matches of pseudo-exposure", "Uses α = 200", "Returns raw rates"]
+    answer: B
+    explanation: "With too few well-observed players the variance estimate is unreliable, so a fixed prior worth 5 matches is used (α/μ = 5)."
+
+  - id: q04-13
+    type: free
+    difficulty: 3
+    tags: [concepts, shrinkage]
+    prompt: "Why does the repo shrink within position × role groups rather than toward the league average for all players?"
+    answer: "Different roles have very different true rates (a centre-back's shots/90 is a fraction of a forward's). Shrinking toward the league mean would bias every CB up and every FW down. The right prior is the distribution of rates among similar players, so the group must match the role; within it, differences are smaller, making the prior both more accurate and appropriately strong."
+    rubric: ["Notes roles have different true rates", "Shrinking to a global mean would bias estimates", "Within-group priors are more informative/accurate"]
+    explanation: player_groups builds FPL position × Understat role (mode over starts).
+
+  - id: q04-14
+    type: mcq
+    difficulty: 3
+    tags: [math, bayes]
+    prompt: "A ridge-penalised MLE and a Bayesian posterior mean under a Gamma–Poisson model differ mainly in that…"
+    options: ["Ridge gives the posterior mode under a Normal prior on the log scale; Gamma–Poisson gives the exact posterior mean under a Gamma prior on the rate", "They are always identical", "Ridge has no prior interpretation", "Gamma–Poisson cannot shrink"]
+    answer: A
+    explanation: Both shrink, but with different priors and summaries (mode vs mean). The Gamma–Poisson posterior is available in closed form.

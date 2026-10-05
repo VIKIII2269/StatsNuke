@@ -1,0 +1,120 @@
+module: "01"
+title: Python, NumPy and pandas
+questions:
+  - id: q01-01
+    type: mcq
+    difficulty: 1
+    tags: [code, numpy]
+    prompt: "x has shape (2, 3). What is the shape of x.sum(axis=0)?"
+    options: ["(2,)", "(3,)", "(2, 3)", "(1, 3)"]
+    answer: B
+    explanation: The axis you sum over disappears. Summing over axis 0 (the rows) leaves one value per column, shape (3,). With keepdims=True it would be (1, 3).
+
+  - id: q01-02
+    type: mcq
+    difficulty: 1
+    tags: [code, numpy]
+    prompt: "What shape does broadcasting give for arrays of shapes (5, 1) and (1, 7)?"
+    options: ["(5, 7)", "(5, 1)", "(7, 5)", "error"]
+    answer: A
+    explanation: Compare from the right; each pair is equal or contains a 1. The 1s stretch, giving (5, 7).
+
+  - id: q01-03
+    type: mcq
+    difficulty: 2
+    tags: [code, numpy]
+    prompt: "Which pair of shapes cannot be broadcast together?"
+    options: ["(4, 3) and (3,)", "(4, 1) and (3,)", "(4, 3) and (4,)", "(2, 1, 3) and (5, 1)"]
+    answer: C
+    explanation: "(4, 3) vs (4,): from the right, 3 vs 4 — unequal and neither is 1. To broadcast a per-row vector you need shape (4, 1), i.e. v[:, None]."
+
+  - id: q01-04
+    type: numeric
+    difficulty: 2
+    tags: [code, numpy]
+    prompt: "arr = np.zeros(4); idx = np.array([2, 2, 2]); arr[idx] += 1. What is arr[2]?"
+    answer: 1
+    tolerance: 0
+    explanation: Fancy-indexed in-place updates are buffered, so the repeated index is written once. np.add.at(arr, idx, 1) would give 3. build_cells uses np.add.at for exactly this reason.
+
+  - id: q01-05
+    type: mcq
+    difficulty: 2
+    tags: [code, numpy]
+    prompt: "x = np.array([40, 10, 30, 20]). What is np.argsort(np.argsort(x))?"
+    options: ["[1, 3, 2, 0]", "[3, 0, 2, 1]", "[0, 1, 2, 3]", "[1, 0, 3, 2]"]
+    answer: B
+    explanation: Argsort-of-argsort gives each element's rank. 40 is the largest (rank 3), 10 the smallest (rank 0), 30 rank 2, 20 rank 1.
+
+  - id: q01-06
+    type: mcq
+    difficulty: 1
+    tags: [code, numpy]
+    prompt: "p has shape (n, 3) of probabilities; y holds the observed class per row. Which expression gives P(observed) per row?"
+    options: ["p[y]", "p[:, y]", "p[np.arange(len(y)), y]", "p.take(y)"]
+    answer: C
+    explanation: Pairing a row index array with a column index array picks one element per row. p[:, y] would give an (n, n) matrix. This is the core of metrics.log_loss.
+
+  - id: q01-07
+    type: mcq
+    difficulty: 2
+    tags: [code, numpy]
+    prompt: "goals = [0, 1, 0, 2]. Which expression gives the goals scored strictly before each minute?"
+    options: ["np.cumsum(goals)", "np.cumsum(goals) - goals", "np.diff(goals)", "np.cumsum(goals)[::-1]"]
+    answer: B
+    explanation: cumsum is inclusive ([0, 1, 1, 3]); subtracting the minute's own goals gives [0, 0, 1, 1]. Including the current minute would leak that minute's outcome into its own state.
+
+  - id: q01-08
+    type: mcq
+    difficulty: 1
+    tags: [code, engineering]
+    prompt: "Why does the simulator create its generator with np.random.default_rng([seed, crc32(fixture_uid)])?"
+    options: ["It is faster than np.random.random", "Each fixture gets its own reproducible stream, so replays are identical and comparisons can share random numbers", "To make results unpredictable", "Because crc32 is cryptographically secure"]
+    answer: B
+    explanation: Deterministic seeding per fixture gives exact replays, deterministic tests and common random numbers. crc32 is a hash, not a security feature.
+
+  - id: q01-09
+    type: mcq
+    difficulty: 2
+    tags: [code, python]
+    prompt: "What does a typing.Protocol like walk_forward.Predictor give the evaluation harness?"
+    options: ["Runtime speed", "Any object with name, version and predict(info, spine) can be evaluated, without inheriting from a base class", "Automatic caching", "Thread safety"]
+    answer: B
+    explanation: Protocols are structural interfaces. A0, the OpenFPL replica and the simulator all satisfy Predictor, so one harness evaluates them all identically.
+
+  - id: q01-10
+    type: multi
+    difficulty: 2
+    tags: [code, python]
+    prompt: "Which are benefits of @dataclass(frozen=True) for parameter objects like TeamStrengthParams?"
+    options: ["Instances cannot be mutated by accident mid-run", "Instances are hashable", "It makes arithmetic faster", "A modified copy via dataclasses.replace is explicit", "It validates types at runtime"]
+    answer: [A, B, D]
+    explanation: Frozen dataclasses are immutable and hashable, and replace() makes changes explicit. Dataclasses do not validate types at runtime (pydantic does) and add no speed.
+
+  - id: q01-11
+    type: free
+    difficulty: 2
+    tags: [code, engineering]
+    prompt: "The M1 filter runs with threadpool_limits(limits=1). Why would one thread be faster than four?"
+    answer: The filter does thousands of tiny linear-algebra calls (2×2 and small matrices). The cost of coordinating BLAS threads exceeds the work per call, so the threads contend. One pass took 76 s with 4 threads and 2.4 s with 1.
+    rubric: ["Identifies that the operations are small", "Explains thread overhead/contention exceeds the parallel benefit", "Optionally quotes the measured 76 s vs 2.4 s"]
+    explanation: Parallelism pays only when each unit of work is large compared with the coordination cost.
+
+  - id: q01-12
+    type: mcq
+    difficulty: 2
+    tags: [code, pandas]
+    prompt: "A walk-forward bug made P(start) fall from 0.30 to 0.14. What caused it?"
+    options: ["A random seed changed", "Days were computed by dividing raw timestamps by ns-per-day while some tables were in microseconds", "XGBoost overfitted", "A merge duplicated rows"]
+    answer: B
+    explanation: Mixed timestamp units (µs vs ns) made 'days since last appearance' wrong. Use .dt.total_seconds() for durations. A test now checks spine and training features agree across units.
+
+  - id: q01-13
+    type: numeric
+    difficulty: 1
+    tags: [code, numpy]
+    prompt: "How many elements does np.zeros((10, 5000, 30)) hold?"
+    answer: 1500000
+    tolerance: 0
+    check: "10 * 5000 * 30"
+    explanation: "10 × 5,000 × 30 = 1,500,000. Thinking in shapes tells you memory: at 8 bytes each that is 12 MB."

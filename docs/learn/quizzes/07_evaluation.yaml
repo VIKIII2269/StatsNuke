@@ -1,0 +1,132 @@
+module: "07"
+title: Evaluating forecasts
+questions:
+  - id: q07-01
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, metrics]
+    prompt: "Forecast (H, D, A) = (0.45, 0.30, 0.25); the match is a draw. Log loss (natural log, 3 d.p.)?"
+    answer: 1.204
+    tolerance: 0.002
+    check: "-math.log(0.30)"
+    explanation: "−ln 0.30 = 1.204. Only the probability of the observed outcome matters."
+
+  - id: q07-02
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, metrics]
+    prompt: "Forecast (0.45, 0.30, 0.25); the result is an away win. RPS (3 d.p.)?"
+    answer: 0.383
+    tolerance: 0.002
+    check: "fplh.evaluate.metrics.rps(np.array([[0.45, 0.30, 0.25]]), np.array([2]))"
+    explanation: "Cumulative forecast (0.45, 0.75) vs cumulative outcome (0, 0): differences 0.45 and 0.75; (0.45² + 0.75²)/2 = (0.2025 + 0.5625)/2 = 0.3825."
+
+  - id: q07-03
+    type: mcq
+    difficulty: 1
+    tags: [metrics, concepts]
+    prompt: "What makes a scoring rule 'proper'?"
+    options: ["It is bounded", "Your expected score is optimised by reporting your true belief", "It ignores calibration", "It uses squared error"]
+    answer: B
+    explanation: Proper rules can't be gamed by shading probabilities. Log loss, Brier, RPS and CRPS are proper.
+
+  - id: q07-04
+    type: mcq
+    difficulty: 2
+    tags: [metrics, concepts]
+    prompt: "Why is RPS preferred to log loss as the headline 1X2 metric?"
+    options: ["It is faster", "It respects the ordering H < D < A: predicting a draw when the home side wins is penalised less than predicting an away win", "It is unbounded", "It ignores draws"]
+    answer: B
+    explanation: RPS compares cumulative distributions, so misses 'by more' cost more.
+
+  - id: q07-05
+    type: numeric
+    difficulty: 2
+    tags: [compute, calibration]
+    prompt: "Two calibration bins: 70% of forecasts average 0.10 with observed rate 0.12; 30% average 0.60 with observed 0.50. ECE (3 d.p.)?"
+    answer: 0.044
+    tolerance: 0.001
+    check: "0.7 * abs(0.12 - 0.10) + 0.3 * abs(0.50 - 0.60)"
+    explanation: "0.7 × 0.02 + 0.3 × 0.10 = 0.014 + 0.030 = 0.044."
+
+  - id: q07-06
+    type: mcq
+    difficulty: 2
+    tags: [calibration, concepts]
+    prompt: "A model predicts 0.30 for every player's start probability (the base rate). Which is true?"
+    options: ["It is badly calibrated", "It is calibrated but has no sharpness/resolution, so it is useless for decisions", "It has the best Brier score possible", "It is improper"]
+    answer: B
+    explanation: Calibration alone is not enough; good forecasts are calibrated AND sharp.
+
+  - id: q07-07
+    type: mcq
+    difficulty: 1
+    tags: [protocol]
+    prompt: "Why not evaluate with random k-fold cross-validation?"
+    options: ["It's too slow", "It trains on the future to predict the past, leaking trends and information across time", "It needs more data", "Scikit-learn isn't installed"]
+    answer: B
+    explanation: Walk-forward respects time; k-fold shuffles it.
+
+  - id: q07-08
+    type: mcq
+    difficulty: 2
+    tags: [protocol]
+    prompt: "What role does 2025/26 play in the evaluation design?"
+    options: ["Training", "Tuning gate season", "Untouched holdout (except the documented M7 exception)", "Live season"]
+    answer: C
+    explanation: Gates are judged on 2022/23–2024/25; 2025/26 is reserved as the final exam; 2026/27 is live.
+
+  - id: q07-09
+    type: mcq
+    difficulty: 2
+    tags: [statistics]
+    prompt: "Why does the bootstrap resample whole gameweeks?"
+    options: ["Gameweeks are the unit FPL uses", "Losses within a gameweek are correlated; resampling rows would make CIs too narrow", "To reduce compute", "Rows are not independent of players"]
+    answer: B
+    explanation: Shared fixtures and surprises correlate errors within a gameweek. Blocks preserve that dependence.
+
+  - id: q07-10
+    type: mcq
+    difficulty: 3
+    tags: [statistics, evidence]
+    prompt: "The textbook normal Diebold–Mariano test rejected 8.6% of A-vs-A comparisons at 38 gameweeks. What did the repo do?"
+    options: ["Ignored it", "Added the Harvey–Leybourne–Newbold correction, Student-t critical values and Newey–West truncation at h−1; size ≈ 5%", "Switched to a 1% level", "Dropped DM entirely"]
+    answer: B
+    explanation: A test should reject a true null about 5% of the time at the 5% level; small samples need corrections.
+
+  - id: q07-11
+    type: mcq
+    difficulty: 2
+    tags: [statistics]
+    prompt: "Fused − market RPS = +0.00012, 95% CI [−0.00046, +0.00071]. What can you conclude?"
+    options: ["Fused is significantly better", "Fused is significantly worse", "Non-inferiority: no evidence fused is worse (nor better)", "The test is invalid"]
+    answer: C
+    explanation: The CI straddles 0 and its upper end is tiny; Phase 2's gate was met as non-inferiority.
+
+  - id: q07-12
+    type: numeric
+    difficulty: 3
+    tags: [statistics, compute, power]
+    prompt: "Per-gameweek point differences have sd 15 over n = 110 gameweeks. Approximate standard error of their mean (2 d.p.)?"
+    answer: 1.43
+    tolerance: 0.02
+    check: "15 / math.sqrt(110)"
+    explanation: "15/√110 ≈ 1.43. With 80% power at 5% you need an effect of about 2.8 × 1.43 ≈ 4 points per GW; the observed +2.3 is too small to be detected reliably."
+
+  - id: q07-13
+    type: free
+    difficulty: 3
+    tags: [statistics, concepts]
+    prompt: "Explain why scoring all models on the same rows and analysing the paired difference gives more power than comparing their separate means."
+    answer: "Much of each row's loss comes from difficulty shared by both models (chaotic matches, surprise results). Taking the difference cancels that shared component, so the variance of the difference is much smaller than the variance of either loss (Var(a−b) = Var a + Var b − 2Cov(a,b), and Cov is large). Smaller variance → narrower CI → more power."
+    rubric: ["Identifies shared difficulty/covariance between models' losses", "Differences cancel it (mentions covariance or variance reduction)", "Leads to narrower intervals/more power"]
+    explanation: Pairing is the same idea as common random numbers in simulation (Module 15).
+
+  - id: q07-14
+    type: mcq
+    difficulty: 2
+    tags: [metrics]
+    prompt: "Why does the repo report Spearman within position and top-10 precision in addition to MSE?"
+    options: ["MSE is improper", "FPL decisions depend on ranking players; a model can have good MSE but rank poorly", "They are cheaper", "They replace calibration"]
+    answer: B
+    explanation: A0 has worse MSE than the replica but the best all-rows Spearman, because it separates benched from starting players.

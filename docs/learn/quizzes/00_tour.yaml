@@ -1,0 +1,111 @@
+module: "00"
+title: Tour of the system
+questions:
+  - id: q00-01
+    type: mcq
+    difficulty: 1
+    tags: [concepts, fpl]
+    prompt: How many players are in an FPL squad, and how many start each gameweek?
+    options: ["11 in the squad, 11 start", "15 in the squad, 11 start", "15 in the squad, 15 start", "18 in the squad, 11 start"]
+    answer: B
+    explanation: 2 GK + 5 DEF + 5 MID + 3 FWD = 15. Eleven start; the other four sit on the bench and only score through automatic substitutions or the bench-boost chip.
+
+  - id: q00-02
+    type: mcq
+    difficulty: 1
+    tags: [concepts, data]
+    prompt: Which storage layer keeps raw responses byte-for-byte and is never overwritten?
+    options: ["silver", "gold", "bronze", "configs"]
+    answer: C
+    explanation: Bronze is create-only (lake/bronze.py). Silver is rebuilt from bronze; gold holds derived outputs such as walk-forward predictions and cached emulators.
+
+  - id: q00-03
+    type: mcq
+    difficulty: 1
+    tags: [concepts, evaluation]
+    prompt: What is the FPL deadline D used throughout the code?
+    options: ["Midnight before the gameweek", "90 minutes before the gameweek's first kickoff", "The first kickoff itself", "24 hours before the first kickoff"]
+    answer: B
+    explanation: features/spine.py sets DEADLINE_BEFORE_KICKOFF = 90 minutes, matching FPL's rule. Every forecast is made from what was knowable at D.
+
+  - id: q00-04
+    type: multi
+    difficulty: 2
+    tags: [concepts, evaluation]
+    prompt: Which of these are baselines StatsNuke compares its player forecasts against?
+    options: ["Last-5 average", "A0 (season per-90 × naive minutes)", "OpenFPL replica", "FPL's own ep_next, on live gameweeks", "A random forest the authors never built"]
+    answer: [A, B, C, D]
+    explanation: Last 5, A0 and the OpenFPL replica are the walk-forward bars. ep_next exists only from the project's own captures, so it is compared on live gameweeks (spec gap 2).
+
+  - id: q00-05
+    type: mcq
+    difficulty: 2
+    tags: [concepts, evaluation]
+    prompt: The Phase 4 replay gave the simulator +2.34 points per gameweek over the replica, 95% CI [−1.26, +6.05]. What does the gate conclude?
+    options: ["Pass: the point estimate is positive", "Fail: the CI includes 0, so the advantage is not established", "Pass: the simulator won every season", "Inconclusive: gates ignore CIs"]
+    answer: B
+    explanation: The gate requires the CI to exclude 0. A positive point estimate with a CI that straddles 0 is consistent with no real difference.
+
+  - id: q00-06
+    type: mcq
+    difficulty: 1
+    tags: [concepts, data]
+    prompt: What is "leakage" in forecasting?
+    options: ["Memory leaks in Python", "Using information that was not available at the forecast time", "Losing rows during a join", "Overfitting with too many trees"]
+    answer: B
+    explanation: Leakage means a feature depends on facts observed after the deadline. It makes backtests look better than any real forecaster could be; StatsNuke blocks CI on leakage tests.
+
+  - id: q00-07
+    type: mcq
+    difficulty: 1
+    tags: [concepts]
+    prompt: Why does StatsNuke use betting prices at all, given it never bets?
+    options: ["To place paper bets for profit", "As a strong benchmark and an input: markets are excellent match forecasters", "Because FPL requires it", "To scrape player names"]
+    answer: B
+    explanation: De-vigged prices are among the best public match forecasts. They are a bar to beat (Phase 2 gate) and an input fused with the model (M3).
+
+  - id: q00-08
+    type: mcq
+    difficulty: 2
+    tags: [concepts, engineering]
+    prompt: What decides when a phase is finished?
+    options: ["The calendar in ARCHITECTURE.md §13", "Its exit gate passes on real data", "When all tickets are opened", "When the CI is green"]
+    answer: B
+    explanation: The plan says phases are gated by exit criteria, not the calendar. A green CI is necessary but not sufficient.
+
+  - id: q00-09
+    type: mcq
+    difficulty: 1
+    tags: [concepts, fpl]
+    prompt: What happens to the captain's points?
+    options: ["Tripled always", "Doubled (tripled with the triple-captain chip)", "Unchanged; captaincy is cosmetic", "Halved if they don't play"]
+    answer: B
+    explanation: The captain scores double; the triple-captain chip makes it triple for one week. That is why the MILP has captain variables k and triple-captain bonus variables kt.
+
+  - id: q00-10
+    type: mcq
+    difficulty: 2
+    tags: [concepts]
+    prompt: Which folder turns forecasts into squad, XI, captain and transfer choices?
+    options: ["src/fplh/sim/", "src/fplh/optimize/", "src/fplh/evaluate/", "src/fplh/rules/"]
+    answer: B
+    explanation: optimize/milp.py holds the multi-gameweek mixed-integer program. sim/ makes the forecasts; evaluate/ judges them; rules/ scores events.
+
+  - id: q00-11
+    type: free
+    difficulty: 2
+    tags: [concepts, evaluation]
+    prompt: In your own words, why must every forecast be made "as of" a deadline using only the information set 𝓘(D)?
+    answer: Because the goal is to know how well the system would have done in real time. If a feature uses anything observed after D (a final score, an end-of-season registration, a late price), the backtest is inflated and the model will disappoint live.
+    rubric: ["Mentions using only facts observed at or before D", "Explains that otherwise evaluation is optimistic or invalid", "Connects it to replaying history or the live use case"]
+    explanation: This is principle P5 of the architecture, enforced by InformationSet and the leakage tests (Module 05).
+
+  - id: q00-12
+    type: numeric
+    difficulty: 1
+    tags: [fpl, compute]
+    prompt: A player's expected points next week are 6.5. If you make them captain, how many points do you expect from them (ignoring the vice-captain)?
+    answer: 13
+    tolerance: 0.01
+    check: "2 * 6.5"
+    explanation: Captain points are doubled, so 2 × 6.5 = 13. Expectation is linear, so doubling the points doubles the mean.

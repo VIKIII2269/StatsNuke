@@ -1,0 +1,136 @@
+module: "02"
+title: Probability from zero
+questions:
+  - id: q02-01
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, poisson]
+    prompt: "A team's goals are Poisson with mean 1.2. What is P(they score exactly 0)? (4 d.p.)"
+    answer: 0.3012
+    tolerance: 0.0005
+    check: "math.exp(-1.2)"
+    explanation: "P(0) = e^(−λ) = e^(−1.2) = 0.3012."
+
+  - id: q02-02
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, poisson]
+    prompt: "Same team (Poisson mean 1.2). What is P(they score exactly 2)? (4 d.p.)"
+    answer: 0.2169
+    tolerance: 0.0005
+    check: "math.exp(-1.2) * 1.2**2 / 2"
+    explanation: "e^(−1.2) · 1.2² / 2! = 0.3012 × 1.44 / 2 = 0.2169."
+
+  - id: q02-03
+    type: mcq
+    difficulty: 1
+    tags: [math, poisson]
+    prompt: "For a Poisson(λ) variable, which is true?"
+    options: ["Mean λ, variance λ²", "Mean λ, variance λ", "Mean λ, variance √λ", "Mean 1/λ, variance 1/λ²"]
+    answer: B
+    explanation: Mean equals variance for a Poisson. Variance above the mean is overdispersion; below is underdispersion.
+
+  - id: q02-04
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, gamma]
+    prompt: "M1 models xG as Gamma(κ, κ/μ). With κ = 16 and μ = 2.0, what is the standard deviation of xG?"
+    answer: 0.5
+    tolerance: 0.001
+    check: "math.sqrt(2.0**2 / 16)"
+    explanation: "Var = μ²/κ = 4/16 = 0.25, so sd = 0.5. The mean is μ = 2.0."
+
+  - id: q02-05
+    type: mcq
+    difficulty: 2
+    tags: [math, negbin]
+    prompt: "A NegBin count has mean μ and size k. What is its variance?"
+    options: ["μ", "μ + μ²/k", "μ²/k", "k·μ"]
+    answer: B
+    explanation: "A Poisson whose rate has Gamma(k, k/μ) noise has variance μ + μ²/k. As k → ∞ it collapses to the Poisson's μ."
+
+  - id: q02-06
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, lognormal]
+    prompt: "A filter predicts log μ ~ Normal(0.4, 0.1). What is E[μ]? (3 d.p.)"
+    answer: 1.568
+    tolerance: 0.002
+    check: "math.exp(0.4 + 0.1 / 2)"
+    explanation: "E[e^X] = e^(m + s²/2). Here s² = 0.1 (the variance), so m + s²/2 = 0.45 and e^0.45 = 1.568, above e^0.4 = 1.492. Uncertainty raises the expected rate."
+
+  - id: q02-07
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, logit]
+    prompt: "What is σ(0), the logistic sigmoid at 0?"
+    answer: 0.5
+    tolerance: 0.0001
+    check: "1 / (1 + math.exp(0))"
+    explanation: σ(0) = 1/(1 + e^0) = 1/2. A logit of 0 means even odds.
+
+  - id: q02-08
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, logit]
+    prompt: "p = 0.2. Add δ = 0.5 on the logit scale. What is the new probability? (3 d.p.)"
+    answer: 0.292
+    tolerance: 0.002
+    check: "1 / (1 + math.exp(-(math.log(0.2 / 0.8) + 0.5)))"
+    explanation: "logit(0.2) = ln(0.25) = −1.386; −1.386 + 0.5 = −0.886; σ(−0.886) = 0.292. M4 shifts substitute-appearance probabilities this way per substitution era."
+
+  - id: q02-09
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, conditional]
+    prompt: "π^S = P(start) = 0.6 and π^B = P(appears | not started) = 0.5. What is P(appears)?"
+    answer: 0.8
+    tolerance: 0.001
+    check: "0.6 + 0.4 * 0.5"
+    explanation: "Law of total probability: P(start) + P(not start)·P(appear | not start) = 0.6 + 0.4 × 0.5 = 0.8."
+
+  - id: q02-10
+    type: mcq
+    difficulty: 2
+    tags: [math, thresholds]
+    prompt: "Two defenders average 7.5 defensive actions. A has NegBin size k = 3, B has k = 30. Who is more likely to reach the 10-action threshold?"
+    options: ["A (more variance)", "B (less variance)", "Equal: same mean", "Cannot tell"]
+    answer: A
+    explanation: "The threshold is above the mean, so the fatter right tail (smaller k, more variance) crosses it more often. Thresholds make variance matter, which is why M7 models the whole distribution."
+
+  - id: q02-11
+    type: mcq
+    difficulty: 1
+    tags: [math, expectation]
+    prompt: "Is E[X + Y] = E[X] + E[Y] only for independent X and Y?"
+    options: ["Yes, independence is required", "No, linearity of expectation always holds", "Only for Normal variables", "Only for counts"]
+    answer: B
+    explanation: Linearity always holds. Variances add only under independence (otherwise add 2·Cov). The MILP's sum-of-expected-points objective relies on linearity.
+
+  - id: q02-12
+    type: mcq
+    difficulty: 2
+    tags: [math, hazards]
+    prompt: "A goal hazard is constant at h per minute. What is P(no goal in the next t minutes)?"
+    options: ["1 − h·t", "e^(−h·t)", "h·e^(−h·t)", "(1 − h)^t exactly"]
+    answer: B
+    explanation: A constant hazard gives exponential waiting times, so the survival probability is e^(−ht). For small ht it is ≈ 1 − ht.
+
+  - id: q02-13
+    type: free
+    difficulty: 2
+    tags: [math, thresholds]
+    prompt: "Why can't StatsNuke just predict each player's mean defensive actions and compare it with the threshold?"
+    answer: "Points depend on crossing the threshold, which is a non-linear function: E[1(C ≥ T)] ≠ 1(E[C] ≥ T). A player averaging 8 still crosses 10 sometimes; one averaging 11 still misses sometimes. You need P(C ≥ T), which needs the whole distribution, its variance included."
+    rubric: ["Says the reward is a non-linear (threshold) function of the count", "Says you need the probability of crossing, which depends on the spread", "Mentions E[g(X)] ≠ g(E[X]) or an example"]
+    explanation: Thresholds appear for clean sheets (0 conceded), defensive contributions (≥ 10/12) and saves (every 3), so StatsNuke simulates distributions, not means.
+
+  - id: q02-14
+    type: numeric
+    difficulty: 3
+    tags: [math, compute, poisson]
+    prompt: "A defender's team concedes Poisson(1.0) goals. FPL takes −1 per 2 conceded (for 90 minutes). What is the expected deduction E[floor(G/2)]? (3 d.p.)"
+    answer: 0.284
+    tolerance: 0.002
+    check: "fplh.models.market.expected_floor_div(1.0, 2)"
+    explanation: "Σ_k P(G = k)·floor(k/2) = P(2)+P(3) + 2(P(4)+P(5)) + … = 0.1839 + 0.0613 + 2(0.0153 + 0.0031) + 3(0.0005 + 0.0001) + … ≈ 0.284 (models/market.expected_floor_div)."

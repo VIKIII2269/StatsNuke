@@ -1,0 +1,122 @@
+module: "03"
+title: Likelihood and optimisation
+questions:
+  - id: q03-01
+    type: numeric
+    difficulty: 1
+    tags: [math, compute, mle]
+    prompt: "A team scores 1, 3, 0, 2, 2, 4 in six matches. What is the Poisson MLE of its scoring rate?"
+    answer: 2
+    tolerance: 0.001
+    check: "np.mean([1, 3, 0, 2, 2, 4])"
+    explanation: "For a Poisson the MLE is the sample mean: 12/6 = 2."
+
+  - id: q03-02
+    type: mcq
+    difficulty: 1
+    tags: [math, likelihood]
+    prompt: "Why do we maximise the log-likelihood rather than the likelihood itself?"
+    options: ["They have different maximisers", "Logs turn products of small probabilities into sums: numerically stable and easier to differentiate, with the same maximiser", "Logs make the likelihood convex always", "SciPy cannot handle products"]
+    answer: B
+    explanation: Log is strictly increasing, so the argmax is unchanged, and sums of logs avoid underflow from multiplying thousands of probabilities.
+
+  - id: q03-03
+    type: mcq
+    difficulty: 2
+    tags: [math, gradient]
+    prompt: "For y ~ Poisson(e^η), what is ∂ℓ/∂η?"
+    options: ["y / η", "y − e^η", "e^η − y", "y·e^η"]
+    answer: B
+    explanation: "ℓ = yη − e^η − log y!, so ∂ℓ/∂η = y − e^η: observed minus expected. The goal-process gradient (resid = y − w·λ) is this, summed per parameter."
+
+  - id: q03-04
+    type: numeric
+    difficulty: 2
+    tags: [math, compute, gradient]
+    prompt: "A Poisson GLM has log μ = β₀ + β₁x. Two rows: (x=0, y=2, μ=1.5) and (x=1, y=1, μ=2.0). What is ∂ℓ/∂β₁?"
+    answer: -1
+    tolerance: 0.001
+    check: "(2 - 1.5) * 0 + (1 - 2.0) * 1"
+    explanation: "∂ℓ/∂β₁ = Σ (y_i − μ_i) x_i = (2 − 1.5)·0 + (1 − 2)·1 = −1. Negative: β₁ should decrease."
+
+  - id: q03-05
+    type: mcq
+    difficulty: 2
+    tags: [optimisation, code]
+    prompt: "Which optimiser does Fusion.fit use, and why is that reasonable?"
+    options: ["L-BFGS-B, for speed with gradients", "Nelder–Mead: only 5 parameters and no analytic gradient is written", "Newton: the Hessian is free", "brentq: it is one-dimensional"]
+    answer: B
+    explanation: Fusion has 5 parameters (α₀, α₁, α₂, two biases) and its NLL passes through a goal model; Nelder–Mead needs only function values and is fine at this size.
+
+  - id: q03-06
+    type: mcq
+    difficulty: 2
+    tags: [optimisation, code]
+    prompt: "Why does de-vig by the power method use brentq?"
+    options: ["It needs the gradient", "It solves a single equation Σ π_k^c = 1 for one unknown c, with a sign change on [1e-6, 50]", "It is a global optimiser", "To handle bounds"]
+    answer: B
+    explanation: "Brent's method finds a root of a one-dimensional function bracketed by a sign change: fast and guaranteed."
+
+  - id: q03-07
+    type: numeric
+    difficulty: 3
+    tags: [math, compute, newton]
+    prompt: "Newton on η = log λ for goals summing to 7 over n = 5 matches, starting at η = 0: what is η after ONE step? (3 d.p.)"
+    answer: 0.4
+    tolerance: 0.001
+    check: "0 - (7 - 5 * math.exp(0)) / (-5 * math.exp(0))"
+    explanation: "Gradient Σy − n e^η = 7 − 5 = 2; second derivative −n e^η = −5; η₁ = 0 − 2/(−5) = 0.4. The optimum is log 1.4 = 0.336, reached in a few more steps."
+
+  - id: q03-08
+    type: mcq
+    difficulty: 1
+    tags: [optimisation, concepts]
+    prompt: "invert_poisson optimises x and uses λ = e^x. What does this buy?"
+    options: ["Faster convergence only", "λ stays positive for any x, and multiplicative changes become additive", "It makes the loss linear", "It removes the need for a starting point"]
+    answer: B
+    explanation: Reparameterising to an unconstrained scale keeps parameters legal without constraints and usually improves scaling.
+
+  - id: q03-09
+    type: mcq
+    difficulty: 2
+    tags: [regularisation]
+    prompt: "In Bayesian terms, adding ridge · Σβ² to an NLL corresponds to…"
+    options: ["A uniform prior", "A Normal prior centred at 0; the optimum is the MAP estimate", "A Laplace prior", "No prior: it is purely numerical"]
+    answer: B
+    explanation: "−log of a Normal(0, τ²) density is β²/(2τ²) + const, so ridge = 1/(2τ²). L1 (lasso) would correspond to a Laplace prior."
+
+  - id: q03-10
+    type: mcq
+    difficulty: 2
+    tags: [regularisation, evidence]
+    prompt: "What happened when fusion was fitted on three seasons with a fixed tiny ridge (0.01)?"
+    options: ["It beat the market significantly", "It learned a −0.06 home bias that was season noise and did slightly worse than market-only", "It ignored the market", "It failed to converge"]
+    answer: B
+    explanation: The market's goal bias swings by about ±0.1 per season. With five seasons and ridge chosen by leave-one-season-out CV, the bias shrank to −0.016.
+
+  - id: q03-11
+    type: free
+    difficulty: 3
+    tags: [evaluation, concepts]
+    prompt: "M1's hyper-parameters maximise the one-step-ahead predictive likelihood. Explain what that is and why it is a better objective than the in-sample likelihood."
+    answer: "Each match's goals are scored under the filter's prediction made before the match was seen (the filter then updates). The objective is the sum of these honest forecasts' log-probabilities. In-sample likelihood rewards parameters that fit noise in hindsight (e.g. ratings that jump to explain every result), whereas predictive likelihood rewards only what helps forecast the future."
+    rubric: ["Each observation is predicted before updating on it", "In-sample fit rewards overfitting/hindsight", "Predictive likelihood measures out-of-sample forecasting quality"]
+    explanation: This is walk-forward evaluation built into the training objective (team_strength.py, the score=True branch of update).
+
+  - id: q03-12
+    type: mcq
+    difficulty: 2
+    tags: [optimisation, code]
+    prompt: "Why does goal_process._Fit.nll return (value, gradient) and call minimize with jac=True?"
+    options: ["SciPy requires it", "Exact gradients make L-BFGS-B fast and accurate; finite differences would cost one extra evaluation per parameter per step", "To enable bounds", "To use Nelder–Mead"]
+    answer: B
+    explanation: With ~30 parameters over hundreds of thousands of cells, analytic gradients let the fit run in 0.4–2 s.
+
+  - id: q03-13
+    type: mcq
+    difficulty: 3
+    tags: [optimisation, evidence]
+    prompt: "Why does fit_hyperparameters restart Nelder–Mead from its own optimum?"
+    options: ["To use different seeds", "In 12–14 dimensions the simplex collapses before converging; restarts recover from premature stops", "Because the objective is random", "To compute standard errors"]
+    answer: B
+    explanation: One 400-iteration run stopped at −2.90002 while better points existed; restarts until the improvement is below 1e-5 reached −2.89881, and two chains agreed to 1e-4.
