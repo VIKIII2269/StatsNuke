@@ -769,6 +769,46 @@ The Odds API free plan gives 500 credits a month. `fplh collect odds --due` (hou
 
 In simulations of real 2025/26 months, runs spend 489–490 credits and never go below the floor, even with half the hourly runs missed.
 
+### 5.6 Model v2: before Phase 5
+
+Every idea was tested walk-forward and kept only if its 95 % gameweek-block CI excluded 0:
+- choices made on 2021/22 (tuning);
+- each final candidate measured once on 2022/23–2024/25;
+- 2025/26 untouched.
+
+The full log, including what was rejected and why, is in [EXPERIMENTS_V2.md](EXPERIMENTS_V2.md).
+
+**Kept: transfer-news minutes** (`features/transfers.py`, `minutes="news"`).
+- **The signal.** FPL's per-round transfer counts are made before the round's deadline (GW1 rows are 0), so they are public at the deadline. Owners selling a player en masse is the crowd's reaction to team news: among players M4 gave P(start) ≈ 0.87, the most-sold 1 % started 35 % of the time.
+- **How it is served.** A derived view re-times the counts to the round's deadline, so no silver file changes and no cached run is invalidated. Live, our bootstrap captures stand in for the open window.
+- **Leakage check.** It perturbs these columns by when they became public (`transfers.PRE_DEADLINE`).
+- **Minutes gain on 2021/22.** M4 gains owners' selling, buying, ownership and team-mates' selling: P(start) Brier −7.9 %, P(appearance) −10.1 %.
+- **Points on 2022/23–2024/25:**
+
+| v2 (simulator + news) − | Δ MSE | 95 % CI | 2022/23 | 2023/24 | 2024/25 |
+|---|---|---|---|---|---|
+| v1 simulator | −0.097 | [−0.112, −0.083] | −0.092 | −0.110 | −0.088 |
+| OpenFPL replica | −0.126 | [−0.146, −0.107] | −0.152 | −0.134 | −0.087 |
+
+- v2's MSE is 3.536, against 3.633 for v1 and 3.661 for the replica. The margin over the replica is 4.3× the Phase 3 margin, positive in every season.
+- Spearman within position is 0.722, now above A0. Top-10 precision is 0.447.
+
+**Kept: consensus-value paper betting** (`ledger --strategy consensus`, `evaluate live-ledger`).
+- **Historical rule.** Bet a named soft book's pre-closing price above Pinnacle's power-de-vigged fair price. Over 2016/17–2024/25: 466 paper bets, CLV +2.9 % [+1.6, +4.2].
+- **Live rule.** The Odds API's UK region has no Pinnacle, so the Betfair exchange is the anchor. As an anchor on 2022/23–2024/25 it gave +2.9 % [+1.3, +4.5] at EV > 3 %.
+- **Why the model has no edge.** Our match model cannot beat the market: its deviations from the early line do not predict the line move (correlation −0.06 to +0.04).
+
+**Rejected:**
+- **Stacking layer** (simulator + replica + crowd + price): −0.010 [−0.020, +0.000] on 2021/22, because the news features already carry the crowd.
+- **Replica blend:** hurts once news is in.
+- **Home/away fix:** season swings, not a bias.
+- **Lineup-aware team rates:** known absences are already in the market at the deadline.
+- **Penalty-taker variants.**
+- **vaastav `xP`:** recorded after the round, so it leaks.
+- **Optimiser tuning:** 2021/22 winners lost on the test seasons.
+- **Model/market hybrid ledger; news as a line-move signal; Asian handicaps:** small gain, deferred.
+- **API-Football injuries:** post-match, so they leak.
+
 ## 6. Phase 5: Extensions, each gated by its ablation row
 
 G7 lineup-aware rates · M11 v1 (LightGBM, A9) → v2 (multi-task network, A10) · anytime-scorer props (A11) · `optimize/saa.py` with rank-aware objective and CVaR (A12) · M12 price changes.

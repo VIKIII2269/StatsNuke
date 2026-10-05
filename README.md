@@ -61,6 +61,12 @@ The simulator's MSE is 3.633, against 3.661 for an OpenFPL re-implementation, 4.
 
 See [the plan, §5](docs/IMPLEMENTATION_PLAN.md#5-phase-4-decisions).
 
+**Model v2** adds FPL transfer activity as a team-news signal to the minutes model. It cuts the simulator's points MSE to 3.536 on 2022/23–2024/25:
+- against v1: −0.097, 95 % CI [−0.112, −0.083];
+- against the OpenFPL replica: −0.126, about 4× the Phase 3 margin.
+
+The paper ledger gains a consensus-value strategy (soft books against a sharp fair price) with CLV of +2.9 % over 2016/17–2024/25, and a live tracker over The Odds API snapshots. See [the plan, §5.6](docs/IMPLEMENTATION_PLAN.md#56-model-v2-before-phase-5) and the [experiment log](docs/EXPERIMENTS_V2.md).
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 if needed).
@@ -96,6 +102,10 @@ uv run fplh evaluate ep-next --season 2026-27                                   
 # Phase 4: decisions
 uv run fplh evaluate replay --season 2022-23 --season 2023-24 --season 2024-25    # the exit gate (~30 min cached)
 uv run fplh evaluate ledger --season 2022-23 --season 2023-24 --season 2024-25    # paper only
+uv run fplh evaluate ledger --season 2022-23 --season 2023-24 --season 2024-25 --strategy consensus --min-ev 0.02
+uv run fplh evaluate live-ledger --min-ev 0.03                                     # live Odds API snapshots
+uv run fplh evaluate v2 --season 2022-23 --season 2023-24 --season 2024-25 \
+    --train-from 2019-20 --train-from 2020-21 --train-from 2021-22             # model v2 vs v1
 
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures
