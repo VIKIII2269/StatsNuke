@@ -1,0 +1,113 @@
+module: "17"
+title: Season replay and paper ledger
+questions:
+  - id: q17-01
+    type: mcq
+    difficulty: 1
+    tags: [replay]
+    prompt: "What makes the season replay a fair comparison of forecasters?"
+    options: ["Each uses its own optimiser", "Every forecaster goes through the same optimiser, rules, prices and scoring, so only forecast quality differs", "Only the best weeks are scored", "It uses closing odds"]
+    answer: B
+    explanation: The decision layer is held fixed; differences come from forecasts.
+
+  - id: q17-02
+    type: mcq
+    difficulty: 2
+    tags: [replay, leakage]
+    prompt: "In the replay, when are actual points used?"
+    options: ["To build E[p, g]", "Only to score the gameweek after the decision is made at its deadline", "To pick the captain", "To set prices"]
+    answer: B
+    explanation: Decisions use only deadline-time forecasts and prices.
+
+  - id: q17-03
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "Simulator vs replica in the replay: +2.34 pts/GW, CI [−1.26, +6.05]. Which statement is right?"
+    options: ["The simulator is proven better", "Consistent direction (all three seasons) but not significant; the test lacks power for an edge this size", "The replica is better", "The replay is broken"]
+    answer: B
+    explanation: With sd ≈ 15 per GW and 110 GWs, only ~4 pts/GW is detectable.
+
+  - id: q17-04
+    type: mcq
+    difficulty: 2
+    tags: [evidence, calibration]
+    prompt: "A0 and last-5 expected their XI to score 85–93 but got about 60. What does that do to decisions?"
+    options: ["Nothing", "The optimiser chases their noise (overconfident forecasts → churn and hits)", "It improves captaincy", "It saves transfers"]
+    answer: B
+    explanation: Calibration matters for decisions; simulator and replica expected ~62 and got 65–67.
+
+  - id: q17-05
+    type: numeric
+    difficulty: 1
+    tags: [compute, ev]
+    prompt: "p̂ = 0.35, price 3.20. EV per unit? (3 d.p.)"
+    answer: 0.12
+    tolerance: 0.001
+    check: "0.35 * 3.20 - 1"
+    explanation: "0.35 × 3.2 − 1 = 0.12."
+
+  - id: q17-06
+    type: numeric
+    difficulty: 2
+    tags: [compute, kelly]
+    prompt: "Same bet (p̂ = 0.35, price 3.20). Quarter-Kelly stake as a fraction of bankroll (4 d.p.)?"
+    answer: 0.0136
+    tolerance: 0.0002
+    check: "0.25 * (0.35 * 3.2 - 1) / (3.2 - 1)"
+    explanation: "f* = 0.12/2.2 = 0.0545; × 0.25 = 0.0136 (1.36%)."
+
+  - id: q17-07
+    type: numeric
+    difficulty: 2
+    tags: [compute, clv]
+    prompt: "You took 2.30; the de-vigged closing probability of that outcome was 0.46. CLV? (3 d.p.)"
+    answer: 0.058
+    tolerance: 0.001
+    check: "2.30 * 0.46 - 1"
+    explanation: "o*_close = 1/0.46 = 2.174; CLV = 2.30/2.174 − 1 = 0.058."
+
+  - id: q17-08
+    type: mcq
+    difficulty: 2
+    tags: [clv, concepts]
+    prompt: "Why is mean CLV better evidence of skill than ROI?"
+    options: ["It is always positive", "ROI over a few hundred bets is dominated by variance; CLV compares to the most-informed price and has far less noise", "ROI ignores stakes", "CLV is easier to compute"]
+    answer: B
+    explanation: A no-edge bettor's CLV centres on 0 tightly while ROI swings widely.
+
+  - id: q17-09
+    type: mcq
+    difficulty: 1
+    tags: [evidence]
+    prompt: "What did the paper ledger find?"
+    options: ["+3% CLV: a real edge", "Mean CLV −1.15% [−2.16%, −0.14%]: no edge on the market", "No bets placed", "ROI 20%"]
+    answer: B
+    explanation: Consistent with fusion tying the market in Phase 2.
+
+  - id: q17-10
+    type: mcq
+    difficulty: 2
+    tags: [safety, engineering]
+    prompt: "How does the repo guarantee no code path can place a real bet?"
+    options: ["A comment in the README", "A unit test fails the build if any HTTP write verb or bookmaker order endpoint appears in src/; the client issues GETs only", "Code review", "The API key is missing"]
+    answer: B
+    explanation: Encode policy as a test, so it can't silently regress.
+
+  - id: q17-11
+    type: mcq
+    difficulty: 3
+    tags: [kelly]
+    prompt: "Why quarter Kelly with a 5% cap instead of full Kelly?"
+    options: ["Full Kelly is illegal", "Full Kelly assumes p̂ is exact; with estimation error it over-bets and risks severe drawdowns, so fractional Kelly trades a little growth for much less risk", "To bet more often", "It increases EV"]
+    answer: B
+    explanation: Model uncertainty argues for shrinking stakes.
+
+  - id: q17-12
+    type: free
+    difficulty: 3
+    tags: [replay, variance]
+    prompt: "Propose a change to the replay that would make the gate more powerful without more seasons, and explain why it helps."
+    answer: "A paired replay on common squads (or common starting squads/decision points): evaluate each strategy's decision from the same state each week, so differences reflect the forecast, not path dependence from diverging squads. This removes a large source of variance in the paired difference (like common random numbers), narrowing the CI."
+    rubric: ["Proposes pairing/common states or another variance-reduction scheme", "Explains it removes path-dependence noise", "Links to narrower CI / more power"]
+    explanation: The plan lists exactly this under 'what could pass the gate next'.

@@ -1,0 +1,110 @@
+module: "18"
+title: ML engineering practices
+questions:
+  - id: q18-01
+    type: mcq
+    difficulty: 1
+    tags: [reproducibility]
+    prompt: "What does a content-derived run id give you?"
+    options: ["Unique ids every run", "Identical inputs → identical id, enabling caching and proof of reproducibility", "Faster training", "Encryption"]
+    answer: B
+    explanation: Manifest.run_id hashes predictor, version, deadlines, horizon, code, data and config hashes, and seeds.
+
+  - id: q18-02
+    type: multi
+    difficulty: 2
+    tags: [reproducibility]
+    prompt: "Which go into the manifest's run id?"
+    options: ["git SHA", "SHA-256 of the silver data read", "SHA-256 of configs", "Predictor name and version", "The wall-clock time of the run"]
+    answer: [A, B, C, D]
+    explanation: Nothing wall-clock enters, which is why replays are byte-identical.
+
+  - id: q18-03
+    type: mcq
+    difficulty: 2
+    tags: [reproducibility, caching]
+    prompt: "cached_walk_forward ignores the git SHA when looking for a cached run. What must developers do?"
+    options: ["Nothing", "Bump the predictor's version whenever its behaviour changes", "Delete the cache weekly", "Commit more often"]
+    answer: B
+    explanation: A documented convenience/correctness trade-off.
+
+  - id: q18-04
+    type: numeric
+    difficulty: 1
+    tags: [compute, http]
+    prompt: "Backoff base 1 s, no jitter: what is the base wait before retry attempt 4 (min(60, 2^(n−1)))?"
+    answer: 8
+    tolerance: 0
+    explanation: "2^(4−1) = 8 s; jitter adds U(0, 1)."
+
+  - id: q18-05
+    type: mcq
+    difficulty: 2
+    tags: [http]
+    prompt: "Why add random jitter to exponential backoff?"
+    options: ["To make retries slower", "To desynchronise many clients so their retries don't arrive in synchronised waves (thundering herd)", "To bypass rate limits", "It's required by HTTP"]
+    answer: B
+    explanation: Synchronised retries can keep a struggling server down.
+
+  - id: q18-06
+    type: mcq
+    difficulty: 1
+    tags: [http]
+    prompt: "Which response does the HttpClient NOT retry?"
+    options: ["429 Too Many Requests", "503 Service Unavailable", "404 Not Found", "A transport timeout"]
+    answer: C
+    explanation: "Other 4xx are returned to the caller: they won't fix themselves by waiting."
+
+  - id: q18-07
+    type: mcq
+    difficulty: 2
+    tags: [testing]
+    prompt: "What is a contract test here?"
+    options: ["A legal document", "A test that parses saved (trimmed real) API payloads, so a change in an external API's shape is caught", "A test of the MILP", "A load test"]
+    answer: B
+    explanation: tests/contracts with samples; required fields typed, extra fields tolerated.
+
+  - id: q18-08
+    type: mcq
+    difficulty: 2
+    tags: [testing, policy]
+    prompt: "How is the 'paper only' policy enforced?"
+    options: ["Documentation", "A test fails the build if any HTTP write verb or bookmaker order endpoint appears in src/", "Code owners", "Rate limits"]
+    answer: B
+    explanation: Policies expressed as tests can't silently regress.
+
+  - id: q18-09
+    type: mcq
+    difficulty: 2
+    tags: [budget]
+    prompt: "How does the odds collector guarantee never exceeding 500 credits a month?"
+    options: ["It runs once a month", "It re-reads the live remaining credits before every call and refuses any that would leave fewer than 10", "It caches responses", "It uses free endpoints only"]
+    answer: B
+    explanation: Plans spend only remaining − floor; simulated months spend 489–490 credits.
+
+  - id: q18-10
+    type: mcq
+    difficulty: 2
+    tags: [process]
+    prompt: "Why are exit gates pre-registered?"
+    options: ["For documentation", "To prevent moving the goalposts after seeing results (forking paths); passes then mean something", "Because CI needs them", "To speed up phases"]
+    answer: B
+    explanation: Pre-registration plus disclosure of post-hoc changes keeps evaluation honest.
+
+  - id: q18-11
+    type: mcq
+    difficulty: 1
+    tags: [tooling]
+    prompt: "What does uv sync --locked in CI ensure?"
+    options: ["Latest package versions", "Exactly the dependency versions in uv.lock, matching local development", "No dependencies", "A Docker image"]
+    answer: B
+    explanation: Reproducible environments are part of reproducible results.
+
+  - id: q18-12
+    type: free
+    difficulty: 3
+    tags: [process, design]
+    prompt: "The repo stores scheduled collections on a git branch as a 'stopgap'. When is a known-imperfect solution good engineering, and what makes it acceptable here?"
+    answer: "When the cost of waiting exceeds the cost of the shortcut (here, FPL snapshots are lost forever if not collected now) and the shortcut's costs and exit are explicit. The plan quantifies the cost (~0.7–1 GB/season bloating clones), says it's acceptable for weeks not seasons, and documents the path to a bucket and a VPS scheduler."
+    rubric: ["Urgency/irrecoverable data justifies acting now", "Costs are quantified", "A documented migration path exists"]
+    explanation: Conscious, documented trade-offs are engineering; silent ones are debt.

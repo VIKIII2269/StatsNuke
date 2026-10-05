@@ -1,0 +1,119 @@
+module: "16"
+title: Optimisation with MILP
+questions:
+  - id: q16-01
+    type: mcq
+    difficulty: 1
+    tags: [concepts, lp]
+    prompt: "Where is a linear objective maximised over a bounded LP feasible region (a polytope)?"
+    options: ["At its centre", "At a corner (vertex)", "Anywhere inside", "On no point"]
+    answer: B
+    explanation: Linear objectives are maximised at vertices; simplex walks between them.
+
+  - id: q16-02
+    type: mcq
+    difficulty: 2
+    tags: [concepts, mip]
+    prompt: "What is the LP relaxation used for in branch and bound?"
+    options: ["It gives the final answer", "It gives an upper bound (for maximisation) to prune branches and measure the optimality gap", "It enforces integrality", "It speeds up I/O"]
+    answer: B
+    explanation: Relax binaries to [0,1]; its value bounds the integer optimum.
+
+  - id: q16-03
+    type: mcq
+    difficulty: 1
+    tags: [modelling]
+    prompt: "How is 'a player can only start if he is in the squad' written?"
+    options: ["y + x = 1", "y ≤ x", "y ≥ x", "x·y = 1"]
+    answer: B
+    explanation: "Implication between binaries: y can be 1 only if x is 1."
+
+  - id: q16-04
+    type: mcq
+    difficulty: 2
+    tags: [modelling]
+    prompt: "kt is the triple-captain bonus indicator, which must be 1 only if the player is captain (k) AND the chip is played (tc). In a maximisation where kt has a positive coefficient, which constraints suffice?"
+    options: ["kt ≥ k + tc − 1", "kt ≤ k and kt ≤ tc", "kt = k·tc directly", "kt ≤ k + tc"]
+    answer: B
+    explanation: The optimiser pushes kt up to min(k, tc). To force kt down as well (if it could be harmful), add kt ≥ k + tc − 1.
+
+  - id: q16-05
+    type: numeric
+    difficulty: 1
+    tags: [compute, fpl]
+    prompt: "Bought at 5.5 (55), now 6.0 (60). FPL sell price in £0.1m units?"
+    answer: 57
+    tolerance: 0
+    explanation: "55 + ⌊(60 − 55)/2⌋ = 55 + 2 = 57 (£5.7m)."
+
+  - id: q16-06
+    type: numeric
+    difficulty: 2
+    tags: [compute, fpl]
+    prompt: "Cap 5. You have 2 free transfers and make 3 transfers this week (no chip). Free transfers next week?"
+    answer: 1
+    tolerance: 0
+    explanation: "min(5, max(2 − 3, 0) + 1) = 1. You took one hit (−4)."
+
+  - id: q16-07
+    type: numeric
+    difficulty: 2
+    tags: [compute, fpl]
+    prompt: "Cap 5. You have 4 free transfers and make 0 transfers. Free transfers next week?"
+    answer: 5
+    tolerance: 0
+    explanation: "min(5, 4 − 0 + 1) = 5."
+
+  - id: q16-08
+    type: mcq
+    difficulty: 3
+    tags: [modelling, solvers]
+    prompt: "Why should big-M constants be as small as possible?"
+    options: ["To avoid overflow", "A huge M weakens the LP relaxation (fractional switches nearly disable constraints), slowing branch and bound", "HiGHS rejects large numbers", "They change the optimum"]
+    answer: B
+    explanation: The code uses 15, the most transfers possible, for hit and banking switches.
+
+  - id: q16-09
+    type: mcq
+    difficulty: 2
+    tags: [modelling]
+    prompt: "Why is a linear objective Σ E_p (y_p + k_p) correct for EXPECTED team points?"
+    options: ["Because points are Normal", "Linearity of expectation: expected team points are the sum of selected players' expected points, captain counted twice", "It's an approximation only", "Because of the central limit theorem"]
+    answer: B
+    explanation: Auto-subs and risk are the parts EV-linearity misses; β and SAA address them.
+
+  - id: q16-10
+    type: mcq
+    difficulty: 3
+    tags: [evidence, design]
+    prompt: "Why are chips decided by plan_week's decomposition rather than in one joint MILP?"
+    options: ["Chips are not linear", "The joint model's LP relaxation was weak: 85% gap after 30 s vs ~1 s to optimality without chips; decomposition values each chip with fast solves", "FPL forbids it", "To use opportunity costs"]
+    answer: B
+    explanation: "An honest engineering trade-off: slight sub-optimality for huge speed."
+
+  - id: q16-11
+    type: mcq
+    difficulty: 2
+    tags: [modelling]
+    prompt: "What does a 'no-good cut' do in the solution pool?"
+    options: ["Removes bad players", "Adds a constraint forbidding the exact first-week decision just found, so the next solve returns a different near-optimal plan", "Cuts the budget", "Speeds up presolve"]
+    answer: B
+    explanation: "Σ_{ones} v − Σ_{zeros} v ≤ |ones| − 1."
+
+  - id: q16-12
+    type: mcq
+    difficulty: 2
+    tags: [testing]
+    prompt: "How is the optimiser's correctness tested?"
+    options: ["Only on real data", "Against brute-force optima on toy instances, plus a violating input for every constraint", "By eye", "Against the OpenFPL replica"]
+    answer: B
+    explanation: Small enough to enumerate means you can prove optimality.
+
+  - id: q16-13
+    type: free
+    difficulty: 3
+    tags: [design]
+    prompt: "Why does the pool include the cheapest few players per position, not just the top 25 by expected points?"
+    answer: "Without cheap players the budget constraint can become infeasible (or force poor squads), because the best players are expensive; including the cheapest per position guarantees a feasible squad always exists and lets the solver fund premiums with budget enablers."
+    rubric: ["Feasibility under the budget", "Cheap 'enablers' allow funding premium players"]
+    explanation: Pool restriction trades completeness for speed; feasibility must be preserved.
