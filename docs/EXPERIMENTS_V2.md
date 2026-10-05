@@ -25,6 +25,28 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
 | F6 | Penalty-taker variants (team-only, half-lives 90–730 d) | Taker hit rate 2020/21–2021/22 | ±2–3 pp, inconsistent | ❌ |
 | F7 | vaastav `xP` (FPL's expected points) as a feature | Timing test | Correlates more with the same round's points (0.63) than the previous (0.53): recorded after the round, so it leaks | ❌ |
 
+### ✅ Final test: v2 on 2022/23–2024/25
+
+Measured once, on the same 80,973 player-fixtures and 110 gameweek blocks as the Phase 3 gate.
+
+| Model | MSE | MAE | Spearman within position | Spearman (played) | Top-10 precision |
+|---|---|---|---|---|---|
+| **v2 (simulator + transfer news)** | **3.536** | **0.942** | **0.722** | **0.387** | **0.447** |
+| v1 simulator | 3.633 | 0.970 | 0.700 | 0.379 | 0.441 |
+| OpenFPL replica | 3.661 | 0.996 | 0.696 | 0.371 | 0.429 |
+| A0 | 4.015 | 1.001 | 0.714 | 0.331 | 0.410 |
+| Last 5 | 4.354 | 1.050 | 0.681 | 0.283 | 0.384 |
+
+| v2 − | Δ MSE | 95 % CI | 2022/23 | 2023/24 | 2024/25 |
+|---|---|---|---|---|---|
+| v1 simulator | **−0.097** | [−0.112, −0.083] | −0.092 | −0.110 | −0.088 |
+| OpenFPL replica | **−0.126** | [−0.146, −0.107] | −0.152 | −0.134 | −0.087 |
+| A0 | −0.500 | [−0.585, −0.430] | −0.501 | −0.502 | −0.433 |
+| Last 5 | −0.833 | [−0.904, −0.764] | −0.871 | −0.819 | −0.765 |
+
+- The margin over the replica is 4.3× the Phase 3 margin (−0.029), and it holds in every season (2024/25 was a tie before).
+- v2 is now also best on ranking all rows, which A0 held in Phase 3.
+
 ### Paper betting ledger
 
 | # | Idea | Test | Result | Status |
