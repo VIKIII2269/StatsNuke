@@ -6,6 +6,7 @@ Run: uv run pytest docs/learn/tests -q
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import random
 import re
@@ -186,11 +187,22 @@ def test_weighted_score_uses_difficulty() -> None:
 # ------------------------------------------------------------------ progress and report
 
 
+def _perfect_answers(qs: list[quiz.Question]) -> list[str]:
+    out: list[str] = []
+    for x in qs:
+        if x.type == "free":
+            out += ["my answer", "2"]  # the answer, then the self-grade
+        elif x.type == "multi":
+            out.append("".join(x.answer))
+        else:
+            out.append(str(x.answer))
+    return out
+
+
 def test_end_to_end_session(tmp_path: Path) -> None:
     scores, hist = tmp_path / "scores.csv", tmp_path / "questions.json"
-    bank = BANKS["00"]
-    qs = list(bank.questions)[:3]
-    answers = iter([str(x.answer) if x.type != "free" else "2" for x in qs])
+    qs = list(BANKS["00"].questions)
+    answers = iter(_perfect_answers(qs))
     said: list[str] = []
     per_q = quiz.run_session(qs, lambda _p: next(answers), said.append)
     assert all(v == 1.0 for v in per_q.values()), per_q
@@ -205,6 +217,23 @@ def test_end_to_end_session(tmp_path: Path) -> None:
     assert status["00"].mastered
     text = quiz.render_report(BANKS, rows, quiz.load_history(hist), {})
     assert "next: module 01" in text
+
+
+def test_partial_quiz_does_not_count_toward_mastery() -> None:
+    few = {q.id: 1.0 for q in list(BANKS["07"].questions)[:3]}
+    rows = [
+        {
+            "module": "07",
+            "mode": "chat",
+            "score": "5",
+            "max": "5",
+            "per_question_json": json.dumps(few),
+        }
+    ]
+    st = {s.module: s for s in quiz.module_status(BANKS, rows, {})}["07"]
+    assert st.latest == 100.0
+    assert st.best is None
+    assert not st.mastered
 
 
 def test_mastery_needs_the_practical(tmp_path: Path) -> None:

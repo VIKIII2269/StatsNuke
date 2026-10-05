@@ -20,6 +20,7 @@ import sys
 import traceback
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 _TASKS: list[tuple[str, Callable[[], None]]] = []
@@ -53,7 +54,7 @@ def _use_solutions(namespace: dict[str, Any]) -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name, value in vars(module).items():
-        if callable(value) and not name.startswith("_") and name in namespace:
+        if not name.startswith("_") and name in namespace and not isinstance(value, ModuleType):
             namespace[name] = value
 
 

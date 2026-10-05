@@ -1,0 +1,94 @@
+module: "21"
+title: Capstone (integrative)
+questions:
+  - id: q21-01
+    type: mcq
+    difficulty: 2
+    tags: [integration, data]
+    prompt: "Order the layers a forecast passes through, from raw to decision."
+    options: ["silver → bronze → models → simulator → MILP", "bronze → silver (point-in-time, gated) → information set → component models → simulator → MILP", "models → bronze → MILP → simulator", "MILP → simulator → models → silver"]
+    answer: B
+    explanation: Raw bytes are immutable (bronze), cleaned with observed_at (silver), filtered by deadline (𝓘(D)), modelled, simulated, then optimised.
+
+  - id: q21-02
+    type: multi
+    difficulty: 3
+    tags: [integration, leakage]
+    prompt: "Which mechanisms together guarantee no model sees the future?"
+    options: ["InformationSet filters observed_at ≤ D and hides outcome columns of dimensions", "max_observed_at is recorded and asserted ≤ D per run", "The future-shuffle test leaves features unchanged", "Random k-fold cross-validation", "Golden tests"]
+    answer: [A, B, C]
+    explanation: Golden tests check the rules engine; k-fold CV would leak.
+
+  - id: q21-03
+    type: numeric
+    difficulty: 3
+    tags: [integration, compute]
+    prompt: "Odds 2.00/3.50/4.00 de-vigged multiplicatively give P(home) = 0.4828. If the inverted home rate is 1.5 and away 1.0 under G0, what is the HOME clean-sheet probability? (4 d.p.)"
+    answer: 0.3679
+    tolerance: 0.0003
+    check: "math.exp(-1.0)"
+    explanation: "The home side keeps a clean sheet when the away team scores 0: e^(−1.0) = 0.3679. The de-vig figure is a distractor."
+
+  - id: q21-04
+    type: mcq
+    difficulty: 2
+    tags: [integration, evidence]
+    prompt: "Which component's improvement would most reduce the simulator's reducible error, per attribution and ablations?"
+    options: ["Bonus (M10)", "Minutes (M4): ≈ 23% of MSE; naive minutes costs +0.200", "Cards (M9)", "The scoreline model (G1 vs G0)"]
+    answer: B
+    explanation: Goal events are larger but mostly luck; G1–G3 showed no gain.
+
+  - id: q21-05
+    type: mcq
+    difficulty: 3
+    tags: [integration, statistics]
+    prompt: "Phase 3's simulator beat the replica significantly on MSE, but Phase 4's replay did not beat it significantly on points. Best explanation?"
+    options: ["The replay is buggy", "A 0.8% MSE edge translates into ~2 points per GW, while 110 GWs with sd ≈ 15 can only detect ~4; the decision test lacks power", "The simulator overfits", "The MILP ignores forecasts"]
+    answer: B
+    explanation: Consistent direction, insufficient power. Variance reduction (paired replays) or more seasons would help.
+
+  - id: q21-06
+    type: mcq
+    difficulty: 2
+    tags: [integration, design]
+    prompt: "Which pattern recurs across shrinkage, fusion's ridge, monotone constraints and the step cap in agents?"
+    options: ["Using more data", "Constraining models with prior knowledge to resist noise and failure", "Using GPUs", "Ignoring baselines"]
+    answer: B
+    explanation: Regularisation, in the broad sense, appears at every layer.
+
+  - id: q21-07
+    type: mcq
+    difficulty: 2
+    tags: [integration, crn]
+    prompt: "Paired comparisons in evaluation (Module 07) and common random numbers in simulation (Module 15) both reduce variance by…"
+    options: ["Using more samples", "Making the two things compared share noise, so it cancels in the difference (large positive covariance)", "Clipping outliers", "Using medians"]
+    answer: B
+    explanation: Var(a − b) = Var a + Var b − 2Cov(a, b).
+
+  - id: q21-08
+    type: numeric
+    difficulty: 2
+    tags: [integration, compute]
+    prompt: "A forward's expected points next GW are 6.2; you also have triple captain available and use it on him. Expected points from him?"
+    answer: 18.6
+    tolerance: 0.01
+    check: "3 * 6.2"
+    explanation: "Triple captain multiplies by 3: 18.6 (the MILP's y + k + kt terms)."
+
+  - id: q21-09
+    type: free
+    difficulty: 3
+    tags: [integration, honesty]
+    prompt: "Give two examples from the repo where a negative or null result was reported rather than hidden, and explain why that matters for trusting the positive results."
+    answer: "Examples: Phase 4 exit gate FAILED (CI includes 0); paper ledger shows no edge (CLV −1.15%); G1–G3 and G4–G6 add nothing over G0; tuned M1 hyper-parameters no better than defaults at deadlines; the first fusion fit was worse than market-only (both runs reported); in-play away ECE miss left open. Reporting failures shows the gates are real tests applied consistently, so passes are not the product of selective reporting or moved goalposts."
+    rubric: ["Gives two correct concrete examples", "Explains credibility/selection-bias argument"]
+    explanation: Honest reporting is a method, not a courtesy.
+
+  - id: q21-10
+    type: mcq
+    difficulty: 2
+    tags: [integration, agents]
+    prompt: "An FPL agent tool returns expected points from a cached walk-forward run. What must the tool enforce?"
+    options: ["Nothing extra", "That the run's deadline is the one being reasoned about, and no data observed after it is used", "Closing odds only", "That the agent never calls it twice"]
+    answer: B
+    explanation: The information-set rule extends to agents.

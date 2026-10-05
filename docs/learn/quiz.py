@@ -43,6 +43,7 @@ SCORES_CSV = PROGRESS / "scores.csv"
 QUESTIONS_JSON = PROGRESS / "questions.json"
 
 MASTERY = 80.0  # quiz score (best attempt, %) a module needs to count as mastered
+MIN_COVERAGE = 0.6  # an attempt counts toward mastery only if it asks ≥ 60 % of the bank
 QUIZ_WEIGHT, PRACTICAL_WEIGHT = 0.7, 0.3
 LETTERS = "ABCDEFGHIJ"
 TYPES = {"mcq", "multi", "numeric", "free"}
@@ -309,6 +310,14 @@ class ModuleStatus:
         return quiz_ok and (self.practical is True or not self.has_practical)
 
 
+def coverage(row: dict[str, str], n_questions: int) -> float:
+    """Share of the module's bank asked in a recorded attempt (1.0 if not recorded)."""
+    detail = row.get("per_question_json") or ""
+    if not detail.strip() or not n_questions:
+        return 1.0
+    return len(json.loads(detail)) / n_questions
+
+
 def practical_modules(directory: Path = EXERCISES) -> dict[str, Path]:
     out: dict[str, Path] = {}
     for p in sorted(directory.glob("ex[0-9][0-9]_*.py")):
@@ -335,7 +344,8 @@ def module_status(
             pct = percent(float(row["score"]), float(row["max"]))
             st.attempts += 1
             st.latest = pct
-            st.best = pct if st.best is None else max(st.best, pct)
+            if coverage(row, len(bank.questions)) >= MIN_COVERAGE:  # partial quizzes don't count
+                st.best = pct if st.best is None else max(st.best, pct)
         out.append(st)
     return out
 
@@ -477,14 +487,27 @@ def run_session(
 
 
 def finish(
-    module: str, mode: str, questions: list[Question], per_question: dict[str, float], say: Say
+    module: str,
+    mode: str,
+    questions: list[Question],
+    per_question: dict[str, float],
+    say: Say,
+    bank_size: int | None = None,
 ) -> float:
     by_id = {q.id: q for q in questions}
     pts, mx = weighted_score((by_id[k], v) for k, v in per_question.items())
     pct = percent(pts, mx)
     append_score(module, mode, pts, mx, per_question)
     update_history(per_question)
-    verdict = "MASTERED" if pct >= MASTERY else f"below the {MASTERY:.0f}% mastery bar"
+    if bank_size and len(per_question) / bank_size < MIN_COVERAGE:
+        verdict = (
+            f"partial quiz ({len(per_question)}/{bank_size} questions): it feeds review and "
+            f"weak-topic stats; mastery needs ≥ {MIN_COVERAGE:.0%} of the bank"
+        )
+    elif pct >= MASTERY:
+        verdict = "MASTERED"
+    else:
+        verdict = f"below the {MASTERY:.0f}% mastery bar"
     say(f"\nscore: {pts:g}/{mx:g} = {pct:.0f}% — {verdict}")
     missed = [k for k, v in per_question.items() if v < 0.999]
     if missed:
@@ -536,7 +559,7 @@ def take(
         qs = qs[:n]
     typer.echo(f"Module {bank.module}: {bank.title} — {len(qs)} questions")
     per_q = run_session(qs, _input, typer.echo)
-    finish(bank.module, "cli", qs, per_q, typer.echo)
+    finish(bank.module, "cli", qs, per_q, typer.echo, bank_size=len(bank.questions))
 
 
 @app.command()
@@ -630,7 +653,8 @@ def record(
     qs = [find_question(banks, k) for k in per_q]
     key = "exam" if module == "exam" else ("diagnostic" if module == "diagnostic" else None)
     target = key or _resolve(banks, module).module
-    finish(target, mode, qs, per_q, typer.echo)
+    size = None if key else len(banks[target].questions)
+    finish(target, mode, qs, per_q, typer.echo, bank_size=size)
 
 
 if __name__ == "__main__":

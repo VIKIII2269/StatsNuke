@@ -1,0 +1,101 @@
+module: "20"
+title: Build an FPL agent
+questions:
+  - id: q20-01
+    type: mcq
+    difficulty: 1
+    tags: [agents, design]
+    prompt: "In the FPL agent, what is the division of labour?"
+    options: ["The model computes everything", "The model chooses tools and explains; fplh's tested functions compute every number", "fplh writes the answer text", "The user calls the tools"]
+    answer: B
+    explanation: Language from the model, numbers from tested code.
+
+  - id: q20-02
+    type: mcq
+    difficulty: 2
+    tags: [agents, api]
+    prompt: "Why does the loop append response.content unchanged (not just the text) to messages?"
+    options: ["To save tokens", "The history must include the assistant's tool_use (and thinking) blocks exactly as returned; current models expect append-only history", "Because text is not allowed", "For logging only"]
+    answer: B
+    explanation: Tool results must pair with the tool_use blocks they answer, and edited history invalidates thinking blocks.
+
+  - id: q20-03
+    type: mcq
+    difficulty: 2
+    tags: [agents, api]
+    prompt: "What does fallbacks='default' (beta server-side-fallback-2026-07-01) do in the agent?"
+    options: ["Retries on network errors", "If a safety classifier declines the request, the API re-runs it on a suitable fallback model within the same call", "Switches to a cheaper model always", "Disables refusals"]
+    answer: B
+    explanation: The loop still checks stop_reason == 'refusal', since the whole chain can decline.
+
+  - id: q20-04
+    type: mcq
+    difficulty: 2
+    tags: [agents, api]
+    prompt: "With claude-opus-5-5, what is the main knob for trading answer quality against cost and latency?"
+    options: ["temperature", "output_config.effort (low … max)", "budget_tokens", "top_k"]
+    answer: B
+    explanation: Thinking is adaptive on this model; effort controls depth. Sampling parameters and budget_tokens are not accepted.
+
+  - id: q20-05
+    type: mcq
+    difficulty: 1
+    tags: [agents, safety]
+    prompt: "What does call_tool return for name='place_bet'?"
+    options: ["A placed bet", "An is_error result: unknown tool, listing the available ones", "An exception that stops the agent", "Nothing"]
+    answer: B
+    explanation: There is no betting tool to call.
+
+  - id: q20-06
+    type: numeric
+    difficulty: 1
+    tags: [fpl, compute]
+    prompt: "Eval case: a FWD plays 90 minutes, scores 2, assists 1 and gets a yellow (2025/26 rules, no bonus). The correct answer?"
+    answer: 12
+    tolerance: 0
+    explanation: "2 + 2×4 + 3 − 1 = 12."
+
+  - id: q20-07
+    type: mcq
+    difficulty: 2
+    tags: [agents, tools]
+    prompt: "Why do the tool schemas use additionalProperties: false and required fields?"
+    options: ["For speed", "So malformed inputs are caught (by the API with strict mode, and by call_tool's validator) instead of silently misbehaving", "The API requires it for all tools", "To hide fields"]
+    answer: B
+    explanation: Validate tool input like user input.
+
+  - id: q20-08
+    type: mcq
+    difficulty: 3
+    tags: [agents, leakage]
+    prompt: "You add a tool that returns walk-forward expected points for a given deadline. Which repo rule must it obey?"
+    options: ["None; it's just a lookup", "The information-set rule: only data observed at or before that deadline", "It must use closing odds", "It must refit the models"]
+    answer: B
+    explanation: Agents don't get exemptions from leakage discipline.
+
+  - id: q20-09
+    type: mcq
+    difficulty: 2
+    tags: [agents, evals]
+    prompt: "A transcript states the right number but called no tool. How should a trajectory grader score it?"
+    options: ["Pass: the number is right", "Fail on trajectory (required tool not called), even if the answer passes", "Ignore it", "Fail on answer"]
+    answer: B
+    explanation: Right-by-luck mental arithmetic won't generalise; track answer and trajectory separately.
+
+  - id: q20-10
+    type: mcq
+    difficulty: 2
+    tags: [agents, production]
+    prompt: "What would you use in production instead of the hand-written loop?"
+    options: ["A bash script", "The SDK's Tool Runner (client.beta.messages.tool_runner with @beta_tool), which runs the same loop with hooks for approvals and logging", "A cron job", "Nothing; hand-written loops are required"]
+    answer: B
+    explanation: The manual loop is for understanding; the runner is less code to own.
+
+  - id: q20-11
+    type: free
+    difficulty: 3
+    tags: [agents, design]
+    prompt: "Design one new tool for the agent: give its name, input schema (fields and types) and the fplh function it wraps, and one way you'd evaluate it."
+    answer: "Example: compare_captains(home_rate/away_rate per fixture, candidate player inputs…, n_sims) wrapping fplh.sim.simulator.simulate_fixture with common random numbers; schema with required numeric rates and candidate ids, additionalProperties false; evaluate by checking the returned difference against a direct simulation with the same seed and that the agent calls it for captaincy questions."
+    rubric: ["Names a concrete fplh function", "Gives a typed schema with required fields", "Proposes a concrete eval (answer or trajectory)"]
+    explanation: Extending the agent is the capstone's project 3.

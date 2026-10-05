@@ -24,7 +24,7 @@ uv run python docs/learn/quiz.py review                  # spaced repetition of 
 uv run python docs/learn/quiz.py exam                    # the final exam (module 21)
 ```
 
-**Mastery.** A module counts as mastered when your best quiz score is at least **80 %** and its practical passes. Questions are weighted by difficulty (1–3 points).
+**Mastery.** A module counts as mastered when your best quiz score is at least **80 %** and its practical passes. Questions are weighted by difficulty (1–3 points). Only attempts that cover at least 60 % of a module's questions count toward mastery; shorter quizzes still feed review and the weak-topic statistics.
 
 **Course score.** The course score out of 100 is 70 % the average of your best quiz scores and 30 % the share of practicals that pass.
 
