@@ -328,31 +328,19 @@ def strategy_forecasts(lake: Lake, seasons: list[str]) -> dict[str, tuple[pd.Dat
     return {k: (v[KEEP].dropna(subset=["expected_points"]), m) for k, (v, m) in preds.items()}
 
 
-V2_STRATEGY = "v2 (stacked, horizon 5)"
-V2_TRAIN_FROM = ("2017-18", "2018-19", "2019-20", "2020-21", "2021-22")
+V2_STRATEGY = "v2 (news, horizon 5)"
 
 
 def v2_forecasts(
     lake: Lake, store: SilverStore, seasons: list[str], deadlines: list[pd.Timestamp]
 ) -> pd.DataFrame:
-    """Model v2 at horizon 5: the news-aware simulator's horizon-5 forecasts with the
-    replica's next-week forecast repeated, stacked by trees trained walk-forward on the
-    horizon-1 forecasts of every earlier season (``models.stack``)."""
+    """Model v2 at horizon 5: the simulator with news-aware minutes (``minutes="news"``).
+    The stacking layer (``models.stack``) is not used: on 2021/22 it added only −0.010
+    MSE [−0.020, +0.000] over this simulator, so it did not pass the gate."""
     from fplh.evaluate.phase3 import run, simulator
-    from fplh.evaluate.v2 import season_runs
-    from fplh.models.stack import repeat_forecasts, stack_frame, walk_forward_stack
 
-    h1 = season_runs(lake, store, [[s] for s in V2_TRAIN_FROM] + [seasons], with_v1=False)
-    sim5 = run(
-        lake, store, simulator(lake, store, deadlines, 1000, 5, minutes="news"), deadlines, 5
-    )
-    pm = store.get("fact_player_match")
-    crowd = store.get("fpl_round_transfers")
-    prices = pm[["player_uid", "value", "observed_at"]]
-    train = stack_frame(h1["sim_news"], h1["replica"], crowd, prices)
-    targets = stack_frame(sim5, repeat_forecasts(h1["replica"], sim5), crowd, prices)
-    y = pm[["player_uid", "fixture_uid", "total_points", "observed_at"]]
-    out: pd.DataFrame = walk_forward_stack(train, y, deadlines, targets=targets)
+    sim = simulator(lake, store, deadlines, 1000, 5, minutes="news")
+    out: pd.DataFrame = run(lake, store, sim, deadlines, 5)
     return out
 
 
