@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 from _check import close, run, task
+from scipy.optimize import minimize  # noqa: F401  (you will need it)
 from scipy.special import gammaln
 
 # ------------------------------------------------------------------ demo

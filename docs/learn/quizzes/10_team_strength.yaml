@@ -1,0 +1,123 @@
+module: "10"
+title: Dynamic team strength (M1)
+questions:
+  - id: q10-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, model]
+    prompt: "c = 0.25, η = 0.2, a_home = 0.3, d_away = 0.1. Home expected goals exp(c + η + a − d)? (3 d.p.)"
+    answer: 1.916
+    tolerance: 0.002
+    check: "math.exp(0.25 + 0.2 + 0.3 - 0.1)"
+    explanation: "0.25 + 0.2 + 0.3 − 0.1 = 0.65, and e^0.65 = 1.916 expected goals."
+
+  - id: q10-02
+    type: mcq
+    difficulty: 2
+    tags: [math, identifiability]
+    prompt: "Why does M1 impose Σ a_i = Σ d_i = 0?"
+    options: ["To speed up the filter", "Without it, shifting all attacks and the league level in opposite directions leaves predictions unchanged (unidentifiable)", "Because ratings must be positive", "It is a Kalman requirement"]
+    answer: B
+    explanation: Constraints remove the directions the data cannot see.
+
+  - id: q10-03
+    type: numeric
+    difficulty: 2
+    tags: [compute, kalman]
+    prompt: "1-D Kalman: prior N(0, 0.09), observation noise variance 0.27, observation y = 0.8. Posterior mean? (3 d.p.)"
+    answer: 0.2
+    tolerance: 0.001
+    check: "0.09 / (0.09 + 0.27) * 0.8"
+    explanation: "K = 0.09/0.36 = 0.25; m' = 0 + 0.25 × 0.8 = 0.2."
+
+  - id: q10-04
+    type: numeric
+    difficulty: 2
+    tags: [compute, kalman]
+    prompt: "Same setup: posterior variance? (4 d.p.)"
+    answer: 0.0675
+    tolerance: 0.0002
+    check: "(1 - 0.25) * 0.09"
+    explanation: "v' = (1 − K)v = 0.75 × 0.09 = 0.0675."
+
+  - id: q10-05
+    type: numeric
+    difficulty: 2
+    tags: [compute, propagation]
+    prompt: "Rating mean 0.4, φ_year = 0.8. After half a year with no matches, what is the mean? (3 d.p.)"
+    answer: 0.358
+    tolerance: 0.002
+    check: "0.4 * 0.8 ** 0.5"
+    explanation: "f = 0.8^(182.5/365) = 0.8^0.5 = 0.894; 0.4 × 0.894 = 0.358."
+
+  - id: q10-06
+    type: mcq
+    difficulty: 3
+    tags: [math, laplace]
+    prompt: "What is the Laplace approximation used in M1's update?"
+    options: ["A Taylor series of the Poisson pmf", "A Gaussian centred at the posterior mode with covariance from the inverse negative Hessian there", "A sampling algorithm", "A uniform prior"]
+    answer: B
+    explanation: Newton finds the mode of the 2-D log posterior; its curvature gives V = (S⁻¹ + W)⁻¹.
+
+  - id: q10-07
+    type: mcq
+    difficulty: 3
+    tags: [math, filter]
+    prompt: "After the Laplace step, how does the update reach every team's ratings?"
+    options: ["It refits all matches", "θ and η are jointly Gaussian, so θ is conditioned on the approximate posterior of η with gain G = P Hᵀ S⁻¹", "Only the two teams change", "By gradient descent"]
+    answer: B
+    explanation: "m ← m + G(η* − η₀), P ← P − G(S − V)Gᵀ: correlations spread information to other teams."
+
+  - id: q10-08
+    type: mcq
+    difficulty: 2
+    tags: [model, xg]
+    prompt: "How does xG enter M1's likelihood, and with what fitted weight?"
+    options: ["As a Poisson count, weight 1", "As Gamma(κ, κ/μ) with weight ω ≈ 0.12 (κ ≈ 16)", "Not at all", "As the outcome instead of goals"]
+    answer: B
+    explanation: Gamma has mean μ and variance μ²/κ; ω scales its log-likelihood relative to goals.
+
+  - id: q10-09
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "Ablation A2 (goals + xG vs goals only) found…"
+    options: ["No difference", "xG significantly improves RPS (−0.0041, CI [−0.0071, −0.0018])", "xG makes it worse", "Only scoreline log loss improves"]
+    answer: B
+    explanation: All three metrics improve with CIs excluding zero.
+
+  - id: q10-10
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "σ_a (attack diffusion) was fitted at its lower bound 0.02. Interpretation?"
+    options: ["The optimiser failed", "Attack ratings barely change within a season; short-term attacking form is mostly noise", "Attack is more volatile than defence", "Home advantage is zero"]
+    answer: B
+    explanation: The predictive likelihood prefers stable attack ratings; defence (σ_d ≈ 0.10) drifts more.
+
+  - id: q10-11
+    type: mcq
+    difficulty: 2
+    tags: [model]
+    prompt: "How are promoted teams' starting ratings set?"
+    options: ["Zero", "The league's worst team", "From their Championship ratings translated to EPL scale (offset + slope), with prior variance", "Copied from the relegated team"]
+    answer: C
+    explanation: Fitted attack slope 0.98 from an offset of −0.62; a dominant promoted side starts higher.
+
+  - id: q10-12
+    type: mcq
+    difficulty: 3
+    tags: [bayes, mcmc]
+    prompt: "Why does the NUTS reference model use a non-centred parameterisation (a = a₀ + cumsum(σ·z), z ~ N(0,1))?"
+    options: ["To save memory", "It avoids funnel geometry when σ is small, which traps HMC samplers in the centred form", "NumPyro requires it", "It makes ratings positive"]
+    answer: B
+    explanation: The scale and the ratings become a-priori independent, so the sampler explores efficiently.
+
+  - id: q10-13
+    type: free
+    difficulty: 3
+    tags: [concepts, forecasting]
+    prompt: "Why should a forecast for a fixture 6 gameweeks ahead be less certain than one for next week, and how does M1 achieve that?"
+    answer: "Ratings can drift before the fixture, so the forecast must integrate over possible future ratings. M1 propagates the state to the kickoff date: the mean decays by φ^(Δ/365) and variance grows by σ²Δ/365 per step, so the predicted log-rate has larger variance; expected goals use exp(η̂ + s²/2) and the optimiser sees appropriately uncertain distant forecasts."
+    rubric: ["Ratings may change before the fixture", "Propagation adds variance proportional to time", "Uncertainty widens the forecast/affects the expectation"]
+    explanation: ARCHITECTURE §7.2 horizon formula; stops the optimiser from being overconfident about distant fixtures.

@@ -16,6 +16,11 @@ import numpy as np
 import pytest
 import scipy.stats
 
+import fplh.evaluate.metrics
+import fplh.models.goal_benchmarks
+import fplh.models.market
+import fplh.rules.bonus
+
 LEARN = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("quiz", LEARN / "quiz.py")
 assert spec is not None
@@ -65,8 +70,15 @@ def test_banks_are_a_reasonable_size_and_mix() -> None:
 
 
 def _namespace() -> dict[str, object]:
-
-    return {"math": math, "np": np, "stats": scipy.stats, "fplh": sys.modules["fplh"]}
+    """Names a bank's ``check`` expression may use (fplh submodules imported explicitly)."""
+    modules = (
+        fplh.evaluate.metrics,
+        fplh.models.goal_benchmarks,
+        fplh.models.market,
+        fplh.rules.bonus,
+    )
+    assert all(modules)
+    return {"math": math, "np": np, "stats": scipy.stats, "fplh": fplh}
 
 
 @pytest.mark.parametrize("question", [x for x in ALL if x.check], ids=lambda x: x.id)

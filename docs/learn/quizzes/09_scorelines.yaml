@@ -1,0 +1,113 @@
+module: "09"
+title: Scoreline models G0–G3
+questions:
+  - id: q09-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, poisson]
+    prompt: "Under G0 with λ_home = 1.2 and λ_away = 0.8, what is P(0-0)? (4 d.p.)"
+    answer: 0.1353
+    tolerance: 0.0003
+    check: "math.exp(-1.2) * math.exp(-0.8)"
+    explanation: "Independence: e^(−1.2)·e^(−0.8) = e^(−2) = 0.1353."
+
+  - id: q09-02
+    type: numeric
+    difficulty: 2
+    tags: [compute, poisson]
+    prompt: "Same rates (1.2, 0.8). P(1-1) under G0? (4 d.p.)"
+    answer: 0.1299
+    tolerance: 0.0003
+    check: "1.2 * math.exp(-1.2) * 0.8 * math.exp(-0.8)"
+    explanation: "Pois(1;1.2)·Pois(1;0.8) = 0.3614 × 0.3595 = 0.1299."
+
+  - id: q09-03
+    type: mcq
+    difficulty: 1
+    tags: [code, grids]
+    prompt: "In the repo's grids (rows = home goals), which expression gives P(home win)?"
+    options: ["np.triu(grid, 1).sum()", "np.tril(grid, -1).sum()", "np.trace(grid)", "grid[1:, 1:].sum()"]
+    answer: B
+    explanation: Home wins have i > j, below the diagonal (tril with k = −1). triu(…, 1) is away wins, trace is draws, grid[1:, 1:] is BTTS.
+
+  - id: q09-04
+    type: mcq
+    difficulty: 2
+    tags: [math, dixon-coles]
+    prompt: "In Dixon–Coles with ρ < 0, which cells increase?"
+    options: ["1-0 and 0-1", "0-0 and 1-1", "All draws", "2-1 and 1-2"]
+    answer: B
+    explanation: "τ(0,0) = 1 − λμρ > 1 and τ(1,1) = 1 − ρ > 1 when ρ < 0; 1-0 and 0-1 fall."
+
+  - id: q09-05
+    type: numeric
+    difficulty: 2
+    tags: [compute, dixon-coles]
+    prompt: "Dixon–Coles τ for the 0-0 cell with λ_h = 1.5, λ_a = 1.0 and ρ = −0.1?"
+    answer: 1.15
+    tolerance: 0.0001
+    check: "1 - 1.5 * 1.0 * (-0.1)"
+    explanation: "1 − λ_h λ_a ρ = 1 + 0.15 = 1.15: 0-0 becomes 15% more likely than under G0."
+
+  - id: q09-06
+    type: mcq
+    difficulty: 3
+    tags: [math, dixon-coles]
+    prompt: "Why does Dixon–Coles leave P(over 2.5) unchanged?"
+    options: ["It renormalises everything", "It only changes cells with i + j ≤ 2 and those changes cancel in total mass, so the over region is untouched", "ρ is always zero", "It changes only the away team"]
+    answer: B
+    explanation: "The extra mass at 0-0 (e^(−λ−μ)·(−λμρ)) and 1-1 (e^(−λ−μ)·λμ·(−ρ)) exactly equals the mass removed at 0-1 and 1-0 (e^(−λ−μ)·λμρ each), so the total is unchanged and cells with i + j ≥ 3 never move."
+
+  - id: q09-07
+    type: mcq
+    difficulty: 2
+    tags: [math, bivariate]
+    prompt: "In the bivariate Poisson X = W₁ + W₃, Y = W₂ + W₃, what is Cov(X, Y)?"
+    options: ["0", "λ₃", "λ₁λ₂", "λ₁ + λ₂"]
+    answer: B
+    explanation: The shared W₃ is the only common part; Var(W₃) = λ₃.
+
+  - id: q09-08
+    type: mcq
+    difficulty: 2
+    tags: [math, com-poisson]
+    prompt: "A COM-Poisson with ν = 1.3 is…"
+    options: ["Overdispersed", "Underdispersed (variance < mean)", "Identical to Poisson", "A binomial"]
+    answer: B
+    explanation: ν > 1 under-, ν < 1 over-dispersed; ν = 1 is Poisson.
+
+  - id: q09-09
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "What did walk-forward evaluation find for G1–G3 versus G0 (with M1 rates)?"
+    options: ["G2 is significantly best", "None significantly better; all fitted parameters near the Poisson case", "G0 is significantly worse than all", "G3 is significantly worse"]
+    answer: B
+    explanation: "ρ = −0.045, λ₃ → 0, ν = 1.018; every CI includes zero. G0 stays the default."
+
+  - id: q09-10
+    type: mcq
+    difficulty: 2
+    tags: [code, design]
+    prompt: "Why does G3 choose each team's λ with brentq so that the marginal mean equals the target?"
+    options: ["For speed", "So all models share the same expected goals and differ only in shape, making comparisons fair", "Because ν must be 1", "To normalise the grid"]
+    answer: B
+    explanation: The COM λ is not the mean when ν ≠ 1; solving for it keeps the means comparable.
+
+  - id: q09-11
+    type: mcq
+    difficulty: 2
+    tags: [code, design]
+    prompt: "What is the benefit of the GoalModel wrapper (grid_fn + params + fit + invert)?"
+    options: ["Plotting", "Any grid function, including the simulator emulator, plugs into fitting, market inversion and fusion unchanged", "It enables GPU", "It hides parameters"]
+    answer: B
+    explanation: One interface for G0–G3 and the emulator.
+
+  - id: q09-12
+    type: free
+    difficulty: 3
+    tags: [concepts, evidence]
+    prompt: "Since G1–G3 add nothing over G0 in the evaluation, why keep them in the codebase at all?"
+    answer: "They are the documented ablation ladder: evidence that the simpler model suffices (a result worth having). G1's ρ is used for market inversion and fusion because it is the one dependence parameter that fits non-trivially; and the closed-form models are benchmarks the in-match process must beat (§11.7)."
+    rubric: ["Ablation evidence/benchmarks have value", "G1 still used for inversion/fusion", "In-match process must beat these closed-form benchmarks"]
+    explanation: Negative results are results.

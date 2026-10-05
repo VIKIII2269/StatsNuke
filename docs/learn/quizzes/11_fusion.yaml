@@ -1,0 +1,103 @@
+module: "11"
+title: Fusion (M3)
+questions:
+  - id: q11-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, fusion]
+    prompt: "α₀ = 1.58 and the other terms are 0. Market weight w = σ(1.58)? (3 d.p.)"
+    answer: 0.829
+    tolerance: 0.001
+    check: "1 / (1 + math.exp(-1.58))"
+    explanation: "σ(1.58) = 0.829; M1 gets 0.171."
+
+  - id: q11-02
+    type: numeric
+    difficulty: 2
+    tags: [compute, fusion]
+    prompt: "λ_mkt = 2.0, λ_mod = 1.5, w = 0.8, no bias. Log-linear pooled rate? (3 d.p.)"
+    answer: 1.888
+    tolerance: 0.002
+    check: "2.0 ** 0.8 * 1.5 ** 0.2"
+    explanation: "exp(0.8 ln 2 + 0.2 ln 1.5) = 2^0.8 × 1.5^0.2 = 1.741 × 1.084 = 1.888."
+
+  - id: q11-03
+    type: mcq
+    difficulty: 2
+    tags: [concepts, fusion]
+    prompt: "Why pool on the log scale (geometric mean) rather than averaging rates?"
+    options: ["It is always larger", "Rates combine multiplicatively; log-averaging keeps rates positive and matches the log-linear models that produced them", "It ignores the market", "SciPy needs logs"]
+    answer: B
+    explanation: Log-linear pooling averages multiplicative effects.
+
+  - id: q11-04
+    type: mcq
+    difficulty: 1
+    tags: [fusion]
+    prompt: "What is w when there is no market price (e.g. a fixture 4 gameweeks ahead)?"
+    options: ["1", "0.5", "0: the model is used alone", "The last known weight"]
+    answer: C
+    explanation: Fusion.weight returns 0 where has_market is false.
+
+  - id: q11-05
+    type: mcq
+    difficulty: 2
+    tags: [fitting]
+    prompt: "What objective does Fusion.fit minimise?"
+    options: ["Squared error of goals", "Mean scoreline-grid NLL under a goal model, plus ridge on all parameters except α₀", "1X2 log loss only", "Brier score"]
+    answer: B
+    explanation: Using the full scoreline likelihood uses all the information in the result.
+
+  - id: q11-06
+    type: mcq
+    difficulty: 3
+    tags: [evidence, regularisation]
+    prompt: "The first fusion fit (3 seasons, ridge 0.01) was slightly worse than market-only. Why?"
+    options: ["Too few iterations", "Its home bias (−0.06) memorised season-specific noise in the market's goal bias", "The market was missing", "Wrong goal model"]
+    answer: B
+    explanation: The market's home bias swings by ±0.1 across seasons; five seasons and CV-chosen ridge 1.0 shrank it to −0.016.
+
+  - id: q11-07
+    type: mcq
+    difficulty: 2
+    tags: [fitting, cv]
+    prompt: "How was the ridge strength chosen without touching evaluation seasons?"
+    options: ["Grid search on 2022/23", "Leave-one-season-out CV within the five training seasons", "Set by hand", "Bayesian optimisation on the holdout"]
+    answer: B
+    explanation: "fit_fusion_cv: for each ridge, fit on all-but-one season, score the held-out one, average; best = 1.0 (NLL 2.87846)."
+
+  - id: q11-08
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "What did the exit gate (fused ≥ market) conclude?"
+    options: ["Fused significantly better", "Met as non-inferiority: not worse; best on scoreline log loss but not significantly better", "Failed", "Not run"]
+    answer: B
+    explanation: RPS difference +0.00012, CI [−0.00046, +0.00071].
+
+  - id: q11-09
+    type: mcq
+    difficulty: 2
+    tags: [leakage, concepts]
+    prompt: "Why is fusion trained on deadline-time price snapshots and not closing prices?"
+    options: ["Closing prices are not stored", "To avoid train/serve skew: at prediction time only deadline prices exist, and closing prices are more informative", "Closing prices have no vig", "For speed"]
+    answer: B
+    explanation: Training on better inputs than you'll have live inflates the weight on them.
+
+  - id: q11-10
+    type: free
+    difficulty: 3
+    tags: [ethics, evaluation]
+    prompt: "The fusion method was changed after seeing the first evaluation result. What makes this acceptable here, and what would make it unacceptable?"
+    answer: "It's acceptable because the change was principled (diagnosed season-noise in the bias), the new hyperparameter choice used only training-season CV, and the plan reports BOTH runs transparently. It would be unacceptable to silently replace the result, or to tune choices against the evaluation seasons until the gate passes (garden of forking paths / p-hacking)."
+    rubric: ["Change driven by diagnosis, selection via training-only CV", "Both runs disclosed", "Names the danger: silent re-runs/tuning on the test set"]
+    explanation: Honest reporting is part of the method.
+
+  - id: q11-11
+    type: mcq
+    difficulty: 2
+    tags: [evidence]
+    prompt: "α₁ (time to kickoff) and α₂ (liquidity) were fitted near 0. What does that mean?"
+    options: ["The code is broken", "Those features carried no signal for the weight in this data; ridge shrank them away", "Prices are always fresh", "Liquidity is constant"]
+    answer: B
+    explanation: Not every plausible feature helps; regularisation lets the data say so.

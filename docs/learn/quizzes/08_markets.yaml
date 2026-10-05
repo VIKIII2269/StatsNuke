@@ -1,0 +1,114 @@
+module: "08"
+title: Betting markets and de-vig
+questions:
+  - id: q08-01
+    type: numeric
+    difficulty: 1
+    tags: [compute, markets]
+    prompt: "Decimal odds 2.50. Implied probability?"
+    answer: 0.4
+    tolerance: 0.0001
+    check: "1 / 2.5"
+    explanation: "π = 1/o = 0.40."
+
+  - id: q08-02
+    type: numeric
+    difficulty: 1
+    tags: [compute, markets]
+    prompt: "A 1X2 market is priced 2.00 / 3.50 / 4.00. What is the overround (as a decimal, 4 d.p.)?"
+    answer: 0.0357
+    tolerance: 0.0002
+    check: "1/2 + 1/3.5 + 1/4 - 1"
+    explanation: "0.5 + 0.2857 + 0.25 − 1 = 0.0357, a 3.6% margin."
+
+  - id: q08-03
+    type: numeric
+    difficulty: 2
+    tags: [compute, devig]
+    prompt: "Same market (2.00 / 3.50 / 4.00). Multiplicative de-vig probability of the home win (4 d.p.)?"
+    answer: 0.4828
+    tolerance: 0.0003
+    check: "fplh.models.market.devig_multiplicative([2.0, 3.5, 4.0])[0]"
+    explanation: "0.5 / 1.0357 = 0.4828."
+
+  - id: q08-04
+    type: mcq
+    difficulty: 2
+    tags: [devig, concepts]
+    prompt: "What is the favourite–longshot bias?"
+    options: ["Favourites are overpriced", "Longshots' implied probabilities overstate their true chances more than favourites' do", "Draws are always underpriced", "Home teams are overrated"]
+    answer: B
+    explanation: Margin is loaded onto longshots; power and Shin de-vig correct for it, multiplicative doesn't.
+
+  - id: q08-05
+    type: mcq
+    difficulty: 2
+    tags: [devig, math]
+    prompt: "In power de-vig, p_k = π_k^c with Σ π_k^c = 1. For a market with overround, c is…"
+    options: ["Less than 1", "Greater than 1", "Exactly 1", "Negative"]
+    answer: B
+    explanation: Σπ > 1 and each π < 1, so raising to c > 1 shrinks them until the sum is 1; small π shrink proportionally more.
+
+  - id: q08-06
+    type: mcq
+    difficulty: 2
+    tags: [devig, evidence]
+    prompt: "How was the default de-vig method chosen, and which won?"
+    options: ["By theory: Shin", "By lowest log loss of closing-price probabilities on pre-2022 matches: power on Pinnacle", "By speed: multiplicative", "Randomly"]
+    answer: B
+    explanation: "Pinnacle log loss: multiplicative 0.953245, power 0.953187, Shin 0.953239 — power wins by < 1e-4."
+
+  - id: q08-07
+    type: mcq
+    difficulty: 1
+    tags: [markets, leakage]
+    prompt: "Can closing odds be a feature for a deadline forecast?"
+    options: ["Yes, they're the most accurate", "No, they are observed at kickoff, after the deadline; they are a benchmark only", "Only for the home side", "Only after de-vig"]
+    answer: B
+    explanation: Closing prices are outside 𝓘(D).
+
+  - id: q08-08
+    type: mcq
+    difficulty: 2
+    tags: [inversion]
+    prompt: "Why add the Over/Under 2.5 price when inverting 1X2 to Poisson rates?"
+    options: ["It's required by SciPy", "1X2 mostly fixes the strength difference; the totals price pins down the overall goal level", "To de-vig", "It removes draws"]
+    answer: B
+    explanation: Two pairs of rates with the same balance but different totals give similar 1X2.
+
+  - id: q08-09
+    type: mcq
+    difficulty: 3
+    tags: [inversion, evidence]
+    prompt: "After inverting 1X2 + O2.5 under independent Poisson, the model's draw probability is below the market's. What does that indicate?"
+    options: ["The market is wrong", "Independent Poisson under-predicts draws for a given goal level — a known regularity motivating Dixon–Coles / in-match dynamics", "The optimiser failed", "The overround was not removed"]
+    answer: B
+    explanation: Draws occur roughly 10% more often than independent Poisson predicts (ARCHITECTURE §7.5).
+
+  - id: q08-10
+    type: numeric
+    difficulty: 2
+    tags: [compute, markets]
+    prompt: "Your model says P(home) = 0.50 and the best price is 2.10. Paper EV per unit staked (3 d.p.)?"
+    answer: 0.05
+    tolerance: 0.0005
+    check: "0.50 * 2.10 - 1"
+    explanation: "EV = p̂·o − 1 = 1.05 − 1 = 0.05 (5%). Module 17 explains why EV alone is not evidence of skill."
+
+  - id: q08-11
+    type: mcq
+    difficulty: 2
+    tags: [evidence, data]
+    prompt: "What happened to Pinnacle closing odds in the data, and what did the repo do?"
+    options: ["Nothing changed", "They stopped after the July 2025 API closure; the benchmark switches to de-vigged market-average closing", "They became free", "They were replaced by FPL ep_next"]
+    answer: B
+    explanation: Complete to 2024/25, 55% of 2025/26, absent in 2026/27.
+
+  - id: q08-12
+    type: free
+    difficulty: 3
+    tags: [concepts, markets]
+    prompt: "Why is M1 (goals + xG) unlikely to beat deadline market prices by itself, and what is its realistic role?"
+    answer: "The market aggregates everything M1 knows (results, xG, form) plus team news, injuries, lineups and the money of informed bettors. M1 sees only historical goals/xG. So M1 alone is worse (RPS 0.197 vs 0.194). Its role is to add information at the margin when combined (fusion), and to provide rates when no market exists (future gameweeks)."
+    rubric: ["The market already contains M1's information plus more (news, money)", "M1 alone is worse empirically", "Role: marginal information via fusion, and forecasts where no price exists"]
+    explanation: Fusion learns a market weight ≈ 0.83.
