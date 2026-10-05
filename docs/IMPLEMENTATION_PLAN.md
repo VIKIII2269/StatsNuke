@@ -658,7 +658,9 @@ How the error divides:
 
 Exit: replay beats the strongest baseline with a bootstrap CI excluding zero.
 
-**Status:** built (PRs #11, #12 and this slice). **The exit gate fails**: the simulator's decisions come first in every season, but the margin over the OpenFPL replica is not significant. The results are reported as they came out, as in Phase 2.
+**Status:** built (PRs #11–#13).
+- **v1 failed the exit gate** (§5.3): first in every season, but the margin over the OpenFPL replica was not significant.
+- **Model v2 passes it** (§5.6): +3.7 points per gameweek over the replica, CI [+0.25, +7.19].
 
 ### 5.1 Game rules, scoring and prices
 
@@ -792,6 +794,25 @@ The full log, including what was rejected and why, is in [EXPERIMENTS_V2.md](EXP
 
 - v2's MSE is 3.536, against 3.633 for v1 and 3.661 for the replica. The margin over the replica is 4.3× the Phase 3 margin, positive in every season.
 - Spearman within position is 0.722, now above A0. Top-10 precision is 0.447.
+
+**Season replay** (2022/23–2024/25; same optimiser and rules; v2 = news-aware simulator, horizon 5):
+
+| Strategy | 2022/23 | 2023/24 | 2024/25 | Total | Hits |
+|---|---|---|---|---|---|
+| **v2 (news, horizon 5)** | **2,391** | 2,339 | **2,377** | **7,107** | 39 |
+| v1 simulator (horizon 5) | 2,272 | 2,384 | 2,300 | 6,956 | 39 |
+| OpenFPL replica (repeat) | 2,185 | 2,250 | 2,264 | 6,699 | 117 |
+| A0 (repeat) | 2,050 | 1,958 | 2,212 | 6,220 | 100 |
+| Last 5 (repeat) | 1,977 | 2,005 | 2,018 | 6,000 | 158 |
+
+| v2 − | Per GW | 95 % CI | DM p | Total |
+|---|---|---|---|---|
+| OpenFPL replica (strongest baseline) | **+3.71** | **[+0.25, +7.19]** | 0.034 | +408 |
+| A0 | +8.06 | [+4.43, +11.66] | < 0.001 | +887 |
+| Last 5 | +10.06 | [+6.39, +13.52] | < 0.001 | +1,107 |
+| v1 simulator (horizon 5) | +1.37 | [−1.20, +3.97] | 0.31 | +151 |
+
+**The Phase 4 exit gate now passes with v2:** it beats the strongest baseline with a CI excluding 0, and is ahead in all three seasons (+206, +89, +113).
 
 **Kept: consensus-value paper betting** (`ledger --strategy consensus`, `evaluate live-ledger`).
 - **Historical rule.** Bet a named soft book's pre-closing price above Pinnacle's power-de-vigged fair price. Over 2016/17–2024/25: 466 paper bets, CLV +2.9 % [+1.6, +4.2].

@@ -65,7 +65,7 @@ See [the plan, §5](docs/IMPLEMENTATION_PLAN.md#5-phase-4-decisions).
 - against v1: −0.097, 95 % CI [−0.112, −0.083];
 - against the OpenFPL replica: −0.126, about 4× the Phase 3 margin.
 
-The paper ledger gains a consensus-value strategy (soft books against a sharp fair price) with CLV of +2.9 % over 2016/17–2024/25, and a live tracker over The Odds API snapshots. See [the plan, §5.6](docs/IMPLEMENTATION_PLAN.md#56-model-v2-before-phase-5) and the [experiment log](docs/EXPERIMENTS_V2.md).
+In the season replay, v2 scores 7,107 points against 6,699 for the replica: +3.7 per gameweek, CI [+0.25, +7.19]. That passes the Phase 4 exit gate. The paper ledger gains a consensus-value strategy (soft books against a sharp fair price) with CLV of +2.9 % over 2016/17–2024/25, and a live tracker over The Odds API snapshots. See [the plan, §5.6](docs/IMPLEMENTATION_PLAN.md#56-model-v2-before-phase-5) and the [experiment log](docs/EXPERIMENTS_V2.md).
 
 ## Quickstart
 
