@@ -46,6 +46,25 @@ Status key: ✅ kept · ❌ rejected · ⏳ running · 🔜 next · 💤 later (
   - The account was suspended after a burst of requests; the owner must reinstate it in the dashboard.
   - ❌ No historical feature gain.
 
+### Decisions (optimiser, season replay)
+
+D1: 2021/22 replay with the v1 simulator (repeat mode), one setting changed at a time. Default is horizon 5, δ 0.9, β 0.1.
+
+| Setting | Points | Hits | vs default |
+|---|---|---|---|
+| default | 1,955 | 81 | — |
+| β 0.2 | 1,963 | 83 | +8 |
+| β 0.05 | 2,062 | 78 | +107 |
+| δ 0.8 | 2,131 | 65 | +176 |
+| δ 1.0 | 2,084 | 88 | +129 |
+| horizon 3 | **2,181** | **58** | **+226** |
+| horizon 8 | 2,021 | 84 | +66 |
+
+**Reading:**
+- Shorter or more discounted planning takes fewer hits and scores more.
+- But δ 0.8 and δ 1.0 both beat δ 0.9, so a single season is noisy (about ±100 points).
+- ⏳ Adopt only if the winners (horizon 3, δ 0.8) also win on the 2022/23–2024/25 replay.
+
 ## Tonight's queue (in order)
 
 1. ⏳ F1b: simulator with news on 2021/22. Also 2017/18–2020/21 runs for stack training, and the test-season run.
