@@ -1,0 +1,23 @@
+{
+  "bytes": 117838,
+  "collector_version": "0.1.0",
+  "content_type": "application/json; charset=utf-8",
+  "endpoint": "odds",
+  "http_status": 200,
+  "observed_at": "2026-10-05T16:26:23Z",
+  "observed_at_us": "2026-10-05T16:26:23.382984+00:00",
+  "params": {
+    "markets": "h2h-totals",
+    "plan": "spare",
+    "regions": "uk",
+    "sport": "soccer_epl"
+  },
+  "response_headers": {
+    "x-requests-last": "2",
+    "x-requests-remaining": "494",
+    "x-requests-used": "6"
+  },
+  "sha256": "977f4ebf5c2a4cc5dbec795bc855a602a259c59b0f7c240de4476ad065b3db99",
+  "source": "odds_api",
+  "url": "https://api.the-odds-api.com/v4/sports/soccer_epl/odds?apiKey=REDACTED&regions=uk&markets=h2h%2Ctotals&oddsFormat=decimal&dateFormat=iso"
+}
