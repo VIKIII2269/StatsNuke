@@ -755,6 +755,29 @@ def evaluate_replay_cmd(
         typer.echo(f"v2 exit gate: {'PASS' if report.v2_passed else 'FAIL'}")
 
 
+@evaluate_app.command("live-ledger")
+def evaluate_live_ledger_cmd(
+    min_ev: Annotated[float, typer.Option(help="Paper-bet EV threshold.")] = 0.03,
+) -> None:
+    """Live consensus-value paper bets from The Odds API snapshots (paper only)."""
+    import pandas as pd
+
+    from fplh.delivery.live_consensus import live_consensus
+    from fplh.features.information_set import SilverStore
+
+    odds = SilverStore(Lake(get_settings().lake_uri)).get("snap_odds")
+    live = odds[odds["source"] == "odds_api"] if not odds.empty else odds
+    if live.empty:
+        typer.echo("no Odds API snapshots in the lake yet")
+        return
+    bets = live_consensus(live, min_ev=min_ev)
+    typer.echo(f"snapshots {live['observed_at'].nunique()}, paper bets {len(bets)}")
+    if not bets.empty:
+        typer.echo(f"mean EV {bets['ev'].mean():+.4f}, mean CLV so far {bets['clv'].mean():+.4f}")
+        with pd.option_context("display.width", 250, "display.max_columns", 20):
+            typer.echo(bets.round(3).to_string(index=False))
+
+
 @evaluate_app.command("v2")
 def evaluate_v2_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Gate seasons, e.g. 2022-23.")],

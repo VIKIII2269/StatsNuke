@@ -56,7 +56,9 @@ Measured once, on the same 80,973 player-fixtures and 110 gameweek blocks as the
 | B3 | Our model predicts the line move (early → close) | corr(model − early, close − early) | −0.06 to +0.04 (fused and M1) | ❌ (cause of no model edge) |
 | B4 | FPL transfer news predicts the line move | corr, 2,280 fixtures | −0.06 (right sign, about 3 SE), top 5 % move only 0.46 pp | ❌ as a bet signal |
 | B5 | Asian handicap consensus | CLV 2017/18–2024/25 | Bet365: almost no edges. Best price across books: +2.4 % [+1.0, +3.9], n = 134 | ➖ small |
-| B6 | Betfair exchange as the anchor or venue | CLV | No edge | ❌ |
+| B6 | Betfair exchange as the venue (AH) | CLV | No edge | ❌ |
+| B8 | **Betfair exchange as the fair-price anchor** (live has no Pinnacle in the UK region) | CLV 2022/23–2024/25 (exchange prices start 2022/23) | EV > 3 %: +2.9 % [+1.3, +4.5], n = 22. EV > 2 %: +1.7 % [+0.5, +2.8], n = 51. Market average anchor on 2016/17–2021/22: +2.9 % [+1.6, +4.3] | ✅ live anchor |
+| B7 | **Live consensus tracker** (`fplh evaluate live-ledger`) over The Odds API snapshots (21 UK books) | Paper CLV as snapshots accrue | First 3 snapshots: 3 paper bets (Crystal Palace away at 5.5 at Brighton, EV +4.3 %), CLV so far +2.9 % (not yet against the close) | ⏳ forward test |
 
 ## Incidents
 
