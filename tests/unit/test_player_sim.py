@@ -146,3 +146,43 @@ def replace_capture_times(
     snap = f["snap_fpl_player"].copy()
     snap["observed_at"] = snap["observed_at"].min() + shift
     return {**f, "snap_fpl_player": snap}
+
+
+def test_fpl_flags_override_minutes_at_the_next_round() -> None:
+    import numpy as np
+
+    from fplh.models.player_sim import news_overlay, penalty_order
+
+    spine = pd.DataFrame(
+        {
+            "player_uid": ["a", "b", "c", "d", "a", "d"],
+            "team": ["x", "x", "y", "y", "x", "y"],
+            "horizon": [1, 1, 1, 1, 2, 2],
+        }
+    )
+    mins = pd.DataFrame({"p_start": [0.9] * 6, "p_full": [0.8] * 6, "p_sub": [0.5] * 6})
+    news = pd.DataFrame(
+        {
+            "status": ["i", "d", "a", "u", "i", "u"],
+            "chance_of_playing_next_round": [0, 50, None, 0, 0, 0],
+            "penalties_order": [None, 1, None, None, None, None],
+        }
+    )
+    out = news_overlay(mins, spine, news)
+    np.testing.assert_allclose(out["p_start"], [0.0, 0.45, 0.9, 0.0, 0.9, 0.0])
+    np.testing.assert_allclose(out["p_sub"], [0.0, 0.25, 0.5, 0.0, 0.5, 0.0])
+    assert (out["p_full"] == 0.8).all()
+    goal = pd.DataFrame({"pen_weight": [3.0, 0.5, 2.0, 0.0, 3.0, 0.0]})
+    w = penalty_order(goal, spine, news)["pen_weight"].to_numpy()
+    np.testing.assert_allclose(w, [0.0, 1.0, 2.0, 0.0, 0.0, 0.0])  # team y has no order
+
+
+def test_no_capture_leaves_minutes_unchanged() -> None:
+    from fplh.models.player_sim import news_overlay
+
+    spine = pd.DataFrame({"player_uid": ["a"], "team": ["x"], "horizon": [1]})
+    mins = pd.DataFrame({"p_start": [0.9], "p_full": [0.8], "p_sub": [0.5]})
+    news = pd.DataFrame(
+        {"status": [None], "chance_of_playing_next_round": [None], "penalties_order": [None]}
+    )
+    pd.testing.assert_frame_equal(news_overlay(mins, spine, news), mins)

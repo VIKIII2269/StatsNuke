@@ -31,6 +31,9 @@ SNAPSHOT_FIELDS = (
     "form",
     "transfers_in_event",
     "transfers_out_event",
+    "penalties_order",
+    "corners_and_indirect_freekicks_order",
+    "direct_freekicks_order",
 )
 
 
