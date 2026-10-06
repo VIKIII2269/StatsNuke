@@ -30,10 +30,11 @@ import pandas as pd
 
 from fplh.evaluate.bootstrap import compare
 from fplh.features.information_set import SilverStore
-from fplh.features.prices import price_table, sell_price
+from fplh.features.prices import price_table
 from fplh.features.spine import historical_deadlines
 from fplh.lake.storage import Lake
-from fplh.optimize.milp import SquadRules, State, plan_week
+from fplh.optimize.milp import SquadRules, State
+from fplh.optimize.step import commit, decide, players_frame
 from fplh.rules.config import load_rules
 from fplh.rules.team import score_gameweek
 
@@ -172,37 +173,22 @@ def replay_season(
         e = expected_points(pred, data, gw, hz, mode)
         price = data.prices[gw]
         teams = data.team_at[data.team_at["gw"] == gw].set_index("player_uid")["team"]
-        ids = sorted(set(e.index) | set(state.squad))
-        players = pd.DataFrame(index=pd.Index(ids, name="player_uid"))
-        players["position"] = data.position.reindex(ids)
-        players["team"] = teams.reindex(ids)
-        players["price"] = price.reindex(ids)
-        players = players.join(e).fillna({c: 0.0 for c in e.columns})
-        for c in e.columns:
-            players[c] = players[c].fillna(0.0)
-        players = players.dropna(subset=["position", "team", "price"])
-        players = players[players.index.isin(state.squad) | (players["price"] > 0)]
-        state.gameweek = gw
-        plan = plan_week(
-            players,
-            state,
-            rules,
-            hz,
-            delta=delta,
-            beta=beta,
-            chip_cost=chip_cost,
-            time_limit=time_limit,
-        )
-        # apply transfers at this deadline's prices
-        bank = state.bank
-        squad = dict(state.squad)
-        for p in plan.sells:
-            bank += sell_price(squad.pop(p), int(price[p]))
-        for p in plan.buys:
-            squad[p] = int(price[p])
-            bank -= int(price[p])
-        if bank < 0:
-            raise RuntimeError(f"{strategy} {data.season} GW{gw}: negative bank {bank}")
+        players = players_frame(e, data.position, teams, price, state)
+        try:
+            decision = decide(
+                players,
+                state,
+                rules,
+                hz,
+                price,
+                delta=delta,
+                beta=beta,
+                chip_cost=chip_cost,
+                time_limit=time_limit,
+            )
+        except RuntimeError as err:
+            raise RuntimeError(f"{strategy} {data.season}: {err}") from err
+        plan, squad, bank = decision.plan, decision.squad, decision.bank
         picks = plan.xi + plan.bench
         pos = {str(k): str(v) for k, v in data.position.reindex(picks).items()}
         score = score_gameweek(
@@ -237,11 +223,7 @@ def replay_season(
                 "vice": plan.vice,
             }
         )
-        if plan.chip:
-            state.chips_used.setdefault(plan.chip, []).append(gw)
-        if plan.chip != "free_hit":  # a free-hit squad reverts; its transfers are not kept
-            state.squad, state.bank = squad, bank
-        state.free_transfers = plan.free_transfers_next
+        commit(state, decision, gw)
     log = pd.DataFrame(rows)
     return ReplayResult(
         strategy, data.season, log, int(log["points"].sum()) if len(log) else 0, state.chips_used
