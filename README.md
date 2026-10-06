@@ -112,6 +112,10 @@ uv run fplh live bets                       # consensus-value paper book (paper 
 uv run fplh evaluate v2 --season 2022-23 --season 2023-24 --season 2024-25 \
     --train-from 2019-20 --train-from 2020-21 --train-from 2021-22             # model v2 vs v1
 
+# Phase 6b: the Stats Nuke website (web/, setup in web/README.md)
+uv run fplh live plan-next                  # provisional plan for the next deadline
+uv run fplh web export --out site.json      # the site's snapshot (uploaded by live.yml)
+
 # collect (writes to ./lake unless FPLH_LAKE_URI is set)
 uv run fplh collect fpl-snapshot --with-fixtures
 uv run fplh collect fpl-snapshot --only-within-hours 24   # store only near a deadline

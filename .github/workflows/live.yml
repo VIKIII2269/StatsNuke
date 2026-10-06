@@ -6,8 +6,9 @@
 #   2. decide the next gameweek once its deadline is within 30 h (model v2),
 #   3. update the paper book of consensus-value bets (paper only: nothing is ever placed),
 #   4. score our P(score) against the anytime-scorer prices (forward test A11),
-# post a comment on the "StatsNuke live" issue when anything changed, and persist the
-# state (state/model_team.json, state/paper_bets.parquet) to the data-bronze branch.
+# post a comment on the "StatsNuke live" issue when anything changed, refresh the
+# provisional plan for the next deadline, publish the website's snapshot (Supabase, if
+# configured), and persist the state to the data-bronze branch.
 name: Live
 
 on:
@@ -70,6 +71,14 @@ jobs:
             lake/bronze/source=understat
           key: history-bronze-v1
 
+      - name: Refresh current-season history
+        # the cache above is frozen at its first build; the current season's files change
+        continue-on-error: true
+        run: |
+          uv run --no-sync fplh backfill vaastav --current
+          uv run --no-sync fplh backfill football-data --current
+          uv run --no-sync fplh backfill understat --current --recent-days 10
+
       - name: Restore model caches
         id: emulator
         uses: actions/cache/restore@v4
@@ -93,12 +102,38 @@ jobs:
           uv run --no-sync fplh live bets --report report.md
           uv run --no-sync fplh live props --report report.md
 
+      - name: Provisional plan for the website
+        continue-on-error: true
+        run: uv run --no-sync fplh live plan-next
+
       - name: Save model caches
         if: always() && steps.emulator.outputs.cache-hit != 'true' && hashFiles('lake/gold/emulator/**') != ''
         uses: actions/cache/save@v4
         with:
           path: lake/gold/emulator
           key: emulator-${{ hashFiles('configs/models/**') }}
+
+      - name: Website snapshot
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          uv run --no-sync fplh web export --out site.json
+          # upload in the shell, not in the package: the package never makes a write call
+          # (tests/unit/test_ledger.py guards that for the paper-only betting rule)
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Supabase not configured: snapshot not uploaded"; exit 0
+          fi
+          python3 -c 'import json; d = json.load(open("site.json")); json.dump({"id": "latest", "data": d, "updated_at": d["generated_at"]}, open("upload.json", "w"))'
+          curl --fail-with-body -sS -X POST "${SUPABASE_URL%/}/rest/v1/snapshots" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates,return=minimal" \
+            --data-binary @upload.json
+          echo "snapshot uploaded"
 
       - name: Post to the live issue
         if: hashFiles('report.md') != ''
@@ -120,5 +155,7 @@ jobs:
           for f in model_team.json paper_bets.parquet props_eval.json; do
             [ -f "lake/state/$f" ] && cp "lake/state/$f" state-only/state/
           done
-          [ -d lake/state/forecast ] && cp -r lake/state/forecast state-only/state/
+          for d in forecast forecast_replica next benchmarks; do
+            [ -d "lake/state/$d" ] && cp -r "lake/state/$d" state-only/state/
+          done
           scripts/persist_to_branch.sh state-only data-bronze

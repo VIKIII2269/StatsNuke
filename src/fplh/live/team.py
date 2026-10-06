@@ -127,28 +127,21 @@ def expected_by_gameweek(
     return e
 
 
-def advise(
+def _plan(
     lake: Lake,
     store: SilverStore,
-    season: str,
+    team: LiveTeam,
+    gw: int,
+    deadline: pd.Timestamp,
     now: pd.Timestamp,
-    *,
-    force: bool = False,
-    dry_run: bool = False,
-) -> dict[str, Any] | None:
-    """Decide the next gameweek if its deadline is within ``ADVISE_WITHIN`` (or
-    ``force``) and it has not been decided yet; returns that week's record."""
-    gw, deadline = next_deadline(store, season, now)
-    team = load(lake, season) or LiveTeam(season, State(gw, {}, 1000, 15, {}))
-    if str(gw) in team.weeks and team.weeks[str(gw)].get("advised"):
-        return None
-    if not force and deadline - now > ADVISE_WITHIN:
-        return None
-    rules = SquadRules.from_rules(load_rules(season.replace("-", "/")))
+) -> tuple[dict[str, Any], Any, pd.DataFrame]:
+    """Forecast with model v2 and solve gameweek ``gw`` from the team's state: (the week's
+    record, the optimiser's decision, the forecast)."""
+    rules = SquadRules.from_rules(load_rules(team.season.replace("-", "/")))
     horizon = list(range(gw, min(gw + HORIZON, LAST_GW + 1)))
     pred = forecast(lake, store, deadline)
     expected = expected_by_gameweek(pred, store, horizon)
-    market = market_state(store, season, now)
+    market = market_state(store, team.season, now)
     players = players_frame(
         expected, market["position"], market["team"], market["price"], team.state
     )
@@ -176,13 +169,93 @@ def advise(
             for p in plan.squad
         },
     }
+    return record, decision, pred
+
+
+def _new_or_loaded(lake: Lake, season: str, gw: int) -> LiveTeam:
+    return load(lake, season) or LiveTeam(season, State(gw, {}, 1000, 15, {}))
+
+
+def advise(
+    lake: Lake,
+    store: SilverStore,
+    season: str,
+    now: pd.Timestamp,
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any] | None:
+    """Decide the next gameweek if its deadline is within ``ADVISE_WITHIN`` (or
+    ``force``) and it has not been decided yet; returns that week's record."""
+    gw, deadline = next_deadline(store, season, now)
+    team = _new_or_loaded(lake, season, gw)
+    if str(gw) in team.weeks and team.weeks[str(gw)].get("advised"):
+        return None
+    if not force and deadline - now > ADVISE_WITHIN:
+        return None
+    record, decision, pred = _plan(lake, store, team, gw, deadline, now)
     team.weeks[str(gw)] = record
     commit(team.state, decision, gw)
     team.state.gameweek = gw + 1
     if not dry_run:
         save(lake, team)
         save_forecast(lake, season, gw, pred)
+        save_replica(lake, store, season, gw, deadline)
     return {"gameweek": gw, **record}
+
+
+NEXT_KEY = "state/next/{season}.json"
+NEXT_FORECAST_KEY = "state/next/{season}.parquet"
+NEXT_MAX_AGE = pd.Timedelta(hours=12)
+
+
+def plan_next(
+    lake: Lake, store: SilverStore, season: str, now: pd.Timestamp, *, force: bool = False
+) -> dict[str, Any] | None:
+    """The provisional plan for the next deadline: what the model team would do if the
+    deadline were now, and the forecast behind it, for the website. Nothing is committed.
+    Refreshed when older than ``NEXT_MAX_AGE`` or when the next gameweek changes."""
+    from fplh.lake.parquet import write_parquet
+
+    gw, deadline = next_deadline(store, season, now)
+    key = NEXT_KEY.format(season=season)
+    if not force and lake.exists(key):
+        last = json.loads(lake.get_bytes(key))
+        made = pd.Timestamp(str(last.get("advised")))
+        if int(last.get("gameweek", -1)) == gw and now - made < NEXT_MAX_AGE:
+            return None
+    team = _new_or_loaded(lake, season, gw)
+    decided = team.weeks.get(str(gw), {})
+    if decided.get("advised"):
+        return None  # the real decision is stored; the site shows it
+    record, _, pred = _plan(lake, store, team, gw, deadline, now)
+    out = {"gameweek": gw, "provisional": True, **record}
+    lake.put_bytes(key, json.dumps(out, default=str).encode(), overwrite=True)
+    cols = [c for c in FORECAST_COLUMNS if c in pred]
+    write_parquet(
+        lake,
+        NEXT_FORECAST_KEY.format(season=season),
+        pred[cols].assign(gw=gw),
+        ["fixture_uid", "player_uid"],
+    )
+    return out
+
+
+REPLICA_KEY = "state/forecast_replica/{season}/gw{gw}.parquet"
+
+
+def save_replica(
+    lake: Lake, store: SilverStore, season: str, gw: int, deadline: pd.Timestamp
+) -> None:
+    """The OpenFPL replica's forecast at the same deadline: the live benchmark that the
+    website scores against model v2 once the gameweek is final."""
+    from fplh.lake.parquet import write_parquet
+    from fplh.models.openfpl import OpenFPLReplica
+
+    pred = run(lake, store, OpenFPLReplica(), [deadline])
+    cols = [c for c in ("player_uid", "fixture_uid", "expected_points") if c in pred]
+    key = REPLICA_KEY.format(season=season, gw=gw)
+    write_parquet(lake, key, pred[cols].assign(gw=gw), ["fixture_uid", "player_uid"])
 
 
 def score(lake: Lake, store: SilverStore, season: str) -> list[int]:

@@ -18,9 +18,14 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from fplh.features.information_set import SilverStore
+    from fplh.lake.storage import Lake
 
 FORECAST_KEY = "state/forecast/{season}/gw{gw}.parquet"
 PRIOR_MARGIN = 0.85
@@ -132,3 +137,33 @@ def props_section(summary: pd.DataFrame, rows: pd.DataFrame) -> str:
         f"{_logloss(rows['blend'].to_numpy(), y):.4f}"
     )
     return "\n".join(lines)
+
+
+def season_eval(
+    lake: Lake, store: SilverStore, season: str
+) -> tuple[pd.DataFrame, pd.DataFrame] | str:
+    """The forward test over every stored deadline forecast of ``season``: (rows, summary),
+    or the reason it cannot run yet."""
+    from fplh.lake.parquet import read_parquet
+
+    props = store.get("snap_props")
+    if props.empty or (props["season"] == season).sum() == 0:
+        return "no anytime-scorer captures yet"
+    props = props[props["season"] == season]
+    snap = store.get("snap_fpl_player")
+    snap = snap[snap["season"] == season].sort_values("observed_at")
+    snap = snap.drop_duplicates("code", keep="last")
+    names = store.get("dim_player")
+    players = snap.assign(player_uid="fpl:" + snap["code"].astype(str))[["player_uid", "team"]]
+    players = players.merge(names, on="player_uid", how="left")
+    matched = match_players(props, players)
+    keys = [k for k in lake.list(f"state/forecast/{season}/") if re.search(r"/gw\d+\.parquet$", k)]
+    if not keys:
+        return "no stored forecasts yet"
+    forecasts = pd.concat([read_parquet(lake, k) for k in keys], ignore_index=True)
+    if "p_play" not in forecasts or "p_goal" not in forecasts:
+        return "stored forecasts lack p_goal / p_play"
+    forecasts = forecasts[forecasts["horizon"] == 1] if "horizon" in forecasts else forecasts
+    pm = store.get("fact_player_match")
+    outcomes = pm[pm["season"] == season][["player_uid", "fixture_uid", "minutes", "goals_scored"]]
+    return evaluate(matched, forecasts, outcomes)

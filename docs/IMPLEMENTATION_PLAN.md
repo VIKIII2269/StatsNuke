@@ -862,3 +862,35 @@ A stopgap before the VPS: the `Live` workflow (`.github/workflows/live.yml`) run
 - The state (`state/model_team.json`, `state/paper_bets.parquet`) is persisted to `data-bronze`.
 
 **Deferred:** anytime-scorer props into silver, and our P(score) against them, are not yet built.
+
+### 7.2 Phase 6b: the Stats Nuke website (built)
+
+A static site on GitHub Pages (`web/`, deployed by `.github/workflows/site.yml`). Accounts
+and data live in a free Supabase project (setup: `web/README.md`).
+
+- **Access.**
+  - Sign in, or **I'm a friend**, which creates a pending account with a note.
+  - The owner approves, declines or revokes requests under Access.
+  - Approved friends see eight apps. Health, Data and Access are the owner's only.
+  - Row-level security enforces this in the database (`web/supabase/schema.sql`), not
+    only in the page.
+- **Data.**
+  - `fplh web export` (`src/fplh/web/`) builds one JSON snapshot at the end of every Live
+    run, and a shell step uploads it.
+  - The Python package still makes no write calls, which keeps the paper-only guard in
+    `tests/unit/test_ledger.py` strict.
+  - The snapshot covers:
+    - the next gameweek's plan, from `fplh live plan-next` (refreshed every 12 h until the
+      real decision is made);
+    - five-gameweek forecasts for every player, the model team's season, paper bets and
+      the props test;
+    - benchmarks, pipeline checks and the experiment log.
+- **Benchmarks.**
+  - **Manager panels.** 20 managers each at overall rank N/2 (p50), N/10 (p90) and N/100
+    (p99), chosen on the first run. Their gameweek points net of hits are fetched once per
+    finalised gameweek.
+  - **OpenFPL replica, live.** Its forecast is stored at every deadline beside model v2's
+    (`live.team.save_replica`) and scored by MSE on the same player-fixtures.
+- **Current-season history.** Live now refreshes the current season's vaastav,
+  football-data and Understat files on every run. The history cache had frozen them at
+  its first build.

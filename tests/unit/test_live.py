@@ -97,6 +97,7 @@ def fake_forecast(lake: Lake, store: SilverStore, deadline: pd.Timestamp) -> pd.
 @pytest.fixture
 def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Lake, SilverStore]:
     monkeypatch.setattr(live, "forecast", fake_forecast)
+    monkeypatch.setattr(live, "save_replica", lambda *a, **k: None)
     return Lake(str(tmp_path)), SilverStore.from_frames(frames())
 
 
@@ -225,3 +226,41 @@ def test_live_team_state_starts_fresh_per_season(setup: tuple[Lake, SilverStore]
     lake, _ = setup
     live.save(lake, live.LiveTeam("2025-26", State(30, {"fpl:1": 50}, 0, 1, {})))
     assert live.load(lake, SEASON) is None
+
+
+def test_plan_next_is_provisional_and_refreshed_every_12_hours(
+    setup: tuple[Lake, SilverStore],
+) -> None:
+    lake, store = setup
+    now = DEADLINE - pd.Timedelta(hours=23)
+    rec = live.plan_next(lake, store, SEASON, now)
+    assert rec is not None and rec["provisional"] and rec["gameweek"] == 6
+    assert len(rec["xi"]) == 11
+    assert live.load(lake, SEASON) is None  # nothing committed
+    assert live.plan_next(lake, store, SEASON, now + pd.Timedelta(hours=6)) is None
+    assert live.plan_next(lake, store, SEASON, now + pd.Timedelta(hours=13)) is not None
+    live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=9))
+    assert live.plan_next(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=8), force=True) is None
+
+
+def test_site_snapshot_builds_from_the_live_state(
+    setup: tuple[Lake, SilverStore], tmp_path: Path
+) -> None:
+    from fplh.web.export import build
+
+    lake, store = setup
+    now = DEADLINE - pd.Timedelta(hours=20)
+    live.plan_next(lake, store, SEASON, now)
+    log = tmp_path / "log.md"
+    log.write_text("# Log\n\n## FPL\n\n| # | Idea | Status |\n|---|---|---|\n| F1 | **x** | ✅ |\n")
+    snap = build(lake, store, SEASON, now, log_path=log)
+    json.dumps(snap, allow_nan=False)  # strict JSON
+    assert snap["next"]["gw"] == 6
+    assert snap["plan"]["provisional"] is True
+    assert snap["forecast"]["gws"] == [6, 7, 8, 9, 10]
+    top = snap["players"][0]
+    assert len(top["xp"]) == 5 and top["xp5"] == pytest.approx(sum(top["xp"]), abs=0.05)
+    assert {p["id"] for p in snap["players"]} >= set(snap["plan"]["xi"])
+    assert snap["lab"][0]["tables"][0]["rows"] == [["F1", "**x**", "✅"]]
+    names = {c["name"] for c in snap["data"]["checks"]}
+    assert "Fixture schedule" in names and "Forecast for the next deadline" in names
