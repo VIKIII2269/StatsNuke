@@ -10,6 +10,9 @@ At each deadline D, for every fixture of the next round:
    weights; M9 yellow rates; M8 keeper multipliers; M7 defensive rates when the season's
    rules score them; M10 the BPS weights and player residuals. Every model is fitted on
    𝓘(D) only.
+   FPL's own flags at the deadline (status, chance of playing, penalty order) override
+   M4 and the penalty-taker weights where a capture exists (``news_overlay``,
+   ``penalty_order``): live only, since captures start in 2026/27.
 3. **Simulation.** ``sim.simulator.simulate_fixture`` with ``n_sims`` draws per fixture,
    seeded by (seed, fixture), summarised per player: expected points, the points pmf,
    P(60+), expected minutes, goals, assists, saves, bonus, clean-sheet and haul
@@ -57,6 +60,61 @@ from fplh.sim.simulator import (
 )
 
 PMF_RANGE = (-4, 25)  # points pmf columns pmf_-4 … pmf_25 (tails folded in)
+UNAVAILABLE = ("i", "s", "u", "n")  # injured, suspended, unavailable, not in squad
+GONE = ("u", "n")  # left the club or not in the squad: out at every horizon
+NEWS_MAX_AGE = pd.Timedelta(days=7)
+PEN_ORDER_WEIGHT = {1: 1.0, 2: 0.25, 3: 0.05}
+
+
+def latest_snapshot(info: InformationSet, spine: pd.DataFrame) -> pd.DataFrame:
+    """Per spine row: FPL's status, chance of playing and penalty order from the latest
+    capture at the deadline, if it is at most a week old (else all missing)."""
+    cols = ["status", "chance_of_playing_next_round", "penalties_order"]
+    snap = info.table("snap_fpl_player")
+    out = pd.DataFrame(index=spine.index, columns=cols, dtype=object)
+    if snap.empty:
+        return out
+    snap = snap[snap["observed_at"] >= info.deadline - NEWS_MAX_AGE]
+    if snap.empty:
+        return out
+    last = snap.sort_values("observed_at").drop_duplicates("code", keep="last")
+    last = last.set_index("fpl:" + last["code"].astype("int64").astype(str))
+    for c in cols:
+        if c in last:
+            out[c] = last[c].reindex(spine["player_uid"].to_numpy()).to_numpy()
+    return out
+
+
+def news_overlay(mins: pd.DataFrame, spine: pd.DataFrame, news: pd.DataFrame) -> pd.DataFrame:
+    """FPL's own availability flags as hard rules on M4's probabilities (live only: no
+    capture exists before 2026/27, so backtests are unchanged). Next round: injured,
+    suspended, unavailable or 0 % → cannot play; 25/50/75 % scales P(start) and P(sub).
+    Later rounds: only players who left or are not in the squad are out."""
+    status = news["status"].astype(object).to_numpy()
+    chance = pd.to_numeric(news["chance_of_playing_next_round"], errors="coerce").to_numpy()
+    h1 = spine["horizon"].to_numpy() == 1 if "horizon" in spine else np.ones(len(spine), bool)
+    factor = np.ones(len(spine))
+    known = ~np.isnan(chance)
+    factor = np.where(h1 & known, chance / 100.0, factor)
+    factor = np.where(h1 & np.isin(status, UNAVAILABLE), 0.0, factor)
+    factor = np.where(np.isin(status, GONE), 0.0, factor)
+    out = mins.copy()
+    out["p_start"] = out["p_start"].to_numpy(float) * factor
+    out["p_sub"] = out["p_sub"].to_numpy(float) * factor
+    return out
+
+
+def penalty_order(goal: pd.DataFrame, spine: pd.DataFrame, news: pd.DataFrame) -> pd.DataFrame:
+    """Where FPL lists a team's penalty order, it replaces the history-based taker weights
+    for that team's players (order 1 → 1.0, 2 → 0.25, 3 → 0.05, unlisted → 0)."""
+    order = pd.to_numeric(news["penalties_order"], errors="coerce")
+    if order.isna().all():
+        return goal
+    listed = order.notna().groupby(spine["team"].to_numpy()).transform("any").to_numpy()
+    weight = order.map(PEN_ORDER_WEIGHT).fillna(0.0).to_numpy()
+    out = goal.copy()
+    out["pen_weight"] = np.where(listed, weight, out["pen_weight"].to_numpy(float))
+    return out
 
 
 def prematch_from_info(info: InformationSet, params: TeamStrengthParams) -> pd.DataFrame:
@@ -172,8 +230,10 @@ class PlayerSimulator:
         spine = spine.reset_index(drop=True)
         mins = self._minutes(info, spine).reset_index(drop=True)
         self._calls += 1
+        news = latest_snapshot(info, spine)
+        mins = news_overlay(mins, spine, news)
         attack = fit_attack(info)
-        goal = self._goal_rates(attack, spine)
+        goal = penalty_order(self._goal_rates(attack, spine), spine, news)
         cards = fit_cards(info)
         defence = fit_defence(info)
         saves = fit_saves(info, prematch_from_info(info, self.m1_params))
