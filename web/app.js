@@ -139,21 +139,6 @@
     return svg;
   }
 
-  // ---------- theme ----------
-  const Theme = {
-    get() { try { return localStorage.getItem("sn-theme") || "system"; } catch { return "system"; } },
-    set(v) {
-      try { localStorage.setItem("sn-theme", v); } catch { /* private mode */ }
-      Theme.apply();
-    },
-    apply() {
-      const v = Theme.get();
-      if (v === "system") document.documentElement.removeAttribute("data-theme");
-      else document.documentElement.setAttribute("data-theme", v);
-    },
-  };
-  Theme.apply();
-
   // ---------- backends ----------
   function supabaseBackend() {
     const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
@@ -228,37 +213,71 @@
   const state = { api: null, me: null, snap: null, requests: [], runs: null };
   const root = () => $("#app");
 
-  // ---------- loader ----------
+  // ---------- pixel icons (16×16 maps, drawn once to data URLs) ----------
+  const PAL = { k: "#000000", w: "#ffffff", g: "#c0c0c0", d: "#808080", y: "#ffd800", o: "#d98200", b: "#1c6fe0", c: "#40d8e0", m: "#ff2fa4", r: "#e02020", G: "#22b14c", n: "#8a5a2a" };
+  const PIX = {
+    home: ["................", "................", ".kkkkk..........", "kyyyyyk.........", "kyyyyyykkkkkkkk.", "kyyyyyyyyyyyyyyk", "kkkkkkkkkkkkkkkk", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kooooooooooooook", "kkkkkkkkkkkkkkkk", "................"],
+    gameweek: ["................", ".....kkkkkk.....", "...kkrrrrrrkk...", "..krrwwwwwwrrk..", "..krwwrrrrwwrk..", ".krwwrrrrrrwwrk.", ".krwrrwwwwrrwrk.", ".krwrrwkkwrrwrk.", ".krwrrwkkwrrwrk.", ".krwrrwwwwrrwrk.", ".krwwrrrrrrwwrk.", "..krwwrrrrwwrk..", "..krrwwwwwwrrk..", "...kkrrrrrrkk...", ".....kkkkkk.....", "................"],
+    players: ["................", "..kkkkk.........", ".kcwwwck........", "kcwwnwwck.......", "kwwnnnwwk.......", "kwwwnwwwk.......", "kwwnnnwwk.......", "kcwnnnwck.......", ".kcwwwck........", "..kkkkkdd.......", ".......ddd......", "........ddd.....", ".........ddd....", "..........ddk...", "...........kk...", "................"],
+    team: ["................", "....kkk..kkk....", "..kkyyykkyyykk..", ".kyyyyykkyyyyyk.", "kyyyyyyyyyyyyyyk", "kyyyyyyyyyyyyyyk", "kkkyyyyyyyyyykkk", "..kyyyyyyyyyyk..", "..kyyyykkyyyyk..", "..kyyyykyyyyyk..", "..kyyyykkkyyyk..", "..kyyyykykyyyk..", "..kyyyykkkyyyk..", "..kyyyyyyyyyyk..", "..kkkkkkkkkkkk..", "................"],
+    benchmarks: ["................", "................", ".....kkkkkk.....", ".....kyyyyk.....", ".....kyyyyk.....", ".....kyyyyk.....", ".kkkkkyyyyk.....", ".kgggkyyyyk.....", ".kgggkyyyykkkkk.", ".kgggkyyyykoook.", ".kgggkyyyykoook.", ".kgggkyyyykoook.", ".kgggkyyyykoook.", ".kgggkyyyykoook.", "kkkkkkkkkkkkkkkk", "................"],
+    fixtures: ["................", "...kk....kk.....", ".kkkkkkkkkkkkkk.", ".krrrrrrrrrrrrk.", ".krrrrrrrrrrrrk.", ".kkkkkkkkkkkkkk.", ".kwwwwwwwwwwwwk.", ".kwddwddwddwddk.", ".kwwwwwwwwwwwwk.", ".kwddwddwbbwddk.", ".kwwwwwwwwwwwwk.", ".kwddwddwddwddk.", ".kwwwwwwwwwwwwk.", ".kwddwddwwwwwwk.", ".kkkkkkkkkkkkkk.", "................"],
+    ledger: ["................", "................", "....kkkkkkkk....", "...kyyyyyyyyk...", "...kooooooook...", "...kyyyyyyyyk...", "...kooooooook...", "...kyyyyyyyyk...", "...kooooooook...", "...kyyyyyyyyk...", "...kooooooook...", "...kyyyyyyyyk...", "...kooooooook...", "....kkkkkkkk....", "................", "................"],
+    scorers: ["................", ".....kkkkkk.....", "...kkwwkkwwkk...", "..kwwwkkkkwwwk..", "..kwwwwkkwwwwk..", ".kkwwwwwwwwwwkk.", ".kkkwwwkkwwwkkk.", ".kkwwwkkkkwwwkk.", ".kwwwwwkkwwwwwk.", ".kwwwwwwwwwwwwk.", ".kkwwwwwwwwwwkk.", "..kkkwwkkwwkkk..", "..kwwwkkkkwwwk..", "...kkwwkkwwkk...", ".....kkkkkk.....", "................"],
+    lab: ["................", "......kkkk......", "......kwwk......", "......kwwk......", "......kwwk......", ".....kwwwwk.....", "....kwwwwwwk....", "...kwwwwwwwwk...", "...kGGGGGGGGk...", "..kGGwGGGGGGGk..", "..kGGGGGGwGGGk..", ".kGGGGGGGGGGGGk.", ".kGGwGGGGGGGGGk.", ".kkkkkkkkkkkkkk.", "................", "................"],
+    health: ["................", ".kkkkkkkkkkkkkk.", ".kggggggggggggk.", ".kgkkkkkkkkkkgk.", ".kgkkkkkkkkkkgk.", ".kgkkkkkGkkkkgk.", ".kgkkkkGkGkkkgk.", ".kgGGGGkkkGGGgk.", ".kgkkkkkkkkkkgk.", ".kgkkkkkkkkkkgk.", ".kggggggggggggk.", ".kkkkkkkkkkkkkk.", "......kggk......", "....kkkkkkkk....", "....kggggggk....", "....kkkkkkkk...."],
+    data: ["................", "....kkkkkkkk....", "..kkwwwwwwwwkk..", "..kbkkwwwwkkbk..", "..kbbbkkkkbbbk..", "..kbbbbbbbbbbk..", "..kkbbbbbbbbkk..", "..kbkkbbbbkkbk..", "..kbbbkkkkbbbk..", "..kbbbbbbbbbbk..", "..kkbbbbbbbbkk..", "..kbkkbbbbkkbk..", "..kbbbkkkkbbbk..", "..kbbbbbbbbbbk..", "...kkkkkkkkkk...", "................"],
+    access: ["................", "................", "................", "................", "..kkkk..........", ".kyyyyk.........", "kyykkyyk........", "kyk..kyk........", "kyk..kykkkkkkkk.", "kyykkyyyyyyyyyyk", ".kyyyyykkkkykkyk", "..kkkkk....k..k.", "................", "................", "................", "................"],
+    lock: ["................", "................", ".....kkkkkk.....", "....kk....kk....", "....k......k....", "....k......k....", "..kkkkkkkkkkkk..", "..kyyyyyyyyyyk..", "..kyyyyyyyyyyk..", "..kyyyykkyyyyk..", "..kyyyykkyyyyk..", "..kyyyyyyyyyyk..", "..kyyyyyyyyyyk..", "..kkkkkkkkkkkk..", "................", "................"],
+    wait: ["................", "...kkkkkkkkkk...", "...kggggggggk...", "....kyyyyyyk....", ".....kyyyyk.....", "......kyyk......", ".......kk.......", ".......kk.......", "......kwwk......", ".....kwwwwk.....", "....kwwyywwk....", "...kgyyyyyygk...", "...kkkkkkkkkk...", "................", "................", "................"],
+  };
+  const pixCache = {};
+  function pixSrc(name) {
+    if (pixCache[name]) return pixCache[name];
+    const map = PIX[name] || PIX.home;
+    const c = document.createElement("canvas");
+    c.width = 16; c.height = 16;
+    const g = c.getContext("2d");
+    if (!g) return "";
+    map.forEach((row, y) => [...row].forEach((ch, x) => { if (PAL[ch]) { g.fillStyle = PAL[ch]; g.fillRect(x, y, 1, 1); } }));
+    return (pixCache[name] = c.toDataURL());
+  }
+  const pimg = (name, cls) => h("img", { src: pixSrc(name), alt: "", class: cls || null, draggable: "false" });
+
+  // ---------- boot screen ----------
   const Loader = {
     el: null,
     mount() {
-      const word = h("div", { class: "wordmark", "aria-label": "Stats Nuke" });
-      [..."STATS NUKE"].forEach((c, i) =>
-        word.append(c === " " ? h("span", { class: "gap" }) : h("span", { style: { animationDelay: `${0.35 + i * 0.045}s` } }, c)),
-      );
-      const reactor = h("div", { class: "reactor" }, h("div", { class: "halo" }));
-      const svg = trefoil("", true);
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ring.setAttribute("cx", "50"); ring.setAttribute("cy", "50"); ring.setAttribute("r", "50"); ring.setAttribute("class", "ring");
-      ring.setAttribute("stroke-dasharray", "315"); ring.setAttribute("stroke-dashoffset", "315");
-      svg.append(ring);
-      reactor.append(svg);
-      this.el = h(
-        "div",
-        { class: "loader", role: "status", "aria-live": "polite" },
-        h("div", { class: "loader-core" }, reactor, word,
-          h("div", { class: "loader-status" }, h("div", { class: "bar" }, h("i")), h("div", { class: "loader-step" }, "Starting up"))),
-      );
-      document.body.append(this.el);
       this.started = Date.now();
+      const boot = h("div", { class: "boot" });
+      const bar = h("i");
+      const splash = h("div", { class: "splash" }, h("div", { class: "splash-core" }, trefoil("", true),
+        h("div", { class: "word" }, "Stats", h("b", {}, "Nuke")), h("div", { class: "ver" }, "FPL forecasting system · season 2026/27"),
+        h("div", { class: "progress", role: "progressbar", "aria-label": "Loading" }, bar), h("div", { class: "ver step" }, "Starting up")));
+      this.el = h("div", { class: "loader", role: "status", "aria-live": "polite" }, boot, splash);
+      this.bar = bar;
+      this.boot = boot;
+      document.body.append(this.el);
+      const lines = [
+        ["STATSNUKE BIOS v6.0  ·  Phase 6 build", "hi"],
+        ["Memory test ............ 640K ", "OK"],
+        ["Mounting the lake ....... ", "OK"],
+        ["Loading model v2 ........ ", "OK"],
+        ["Odds tracker (paper only) ", "OK"],
+      ];
+      const fast = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      lines.forEach(([t, k], i) => setTimeout(() => {
+        boot.append(k === "hi" ? h("span", { class: "hi" }, t) : t, k === "OK" ? h("span", { class: "ok" }, k) : "", "\n");
+      }, fast ? 0 : 110 * i));
+      setTimeout(() => $(".splash", this.el).classList.add("on"), fast ? 0 : 750);
     },
     step(text, frac) {
       if (!this.el) return;
-      $(".loader-step", this.el).textContent = text;
-      $(".bar i", this.el).style.width = `${Math.round(frac * 100)}%`;
+      $(".step", this.el).textContent = text;
+      this.bar.style.width = `${Math.round(frac * 100)}%`;
     },
     async done() {
-      const min = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1500;
+      const min = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 2100;
       const wait = Math.max(0, min - (Date.now() - this.started));
       this.step("Ready", 1);
       await new Promise((r) => setTimeout(r, wait));
@@ -299,37 +318,18 @@
     return `${scored.reduce((a, w) => a + w.points, 0)} pts`;
   }
 
-  // ---------- shell pieces ----------
-  function topbar() {
-    const theme = Theme.get();
-    const pop = h("div", { class: "menu-pop", hidden: true });
-    const btn = h("button", { class: "btn icon-btn", "aria-label": "Account", "aria-haspopup": "true", onclick: (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; } }, icon("user"));
-    pop.append(
-      h("div", { class: "who" }, h("div", { class: "pname" }, state.me.name || "Signed in"), h("div", { class: "small muted" }, state.me.email || ""),
-        h("div", { style: { marginTop: "6px" } }, h("span", { class: `chip ${state.me.role === "admin" ? "accent" : "info"}` }, state.me.role === "admin" ? "Owner" : "Friend"))),
-      h("div", { class: "eyebrow", style: { padding: "6px 12px 4px" } }, "Theme"),
-      h("div", { style: { padding: "0 6px 6px" } }, seg(["system", "light", "dark"], theme, (v) => { Theme.set(v); render(); }, (v) => titleCase(v))),
-      h("button", { class: "btn ghost", onclick: async () => { await state.api.signOut(); state.me = null; render(); } }, icon("out"), "Sign out"),
-    );
-    return h("header", { class: "topbar" },
-      h("a", { class: "brand", href: "#" }, trefoil("mark"), h("span", { class: "wordmark" }, "Stats Nuke")),
-      h("div", { class: "top-actions" }, statusChip(), h("div", { class: "menu" }, btn, pop)));
-  }
-
+  // ---------- status ----------
   function worst(checks) {
     const order = { fail: 3, warn: 2, info: 1, ok: 0 };
     return checks.reduce((w, c) => (order[c.status] > order[w] ? c.status : w), "ok");
   }
-  function statusChip() {
+  function systemStatus() {
     const s = state.snap;
-    if (!s) return null;
-    if (isAdmin()) {
-      const w = worst(s.data.checks);
-      const n = s.data.checks.filter((c) => c.status === w).length;
-      const text = w === "ok" || w === "info" ? "All systems nominal" : `${n} ${w === "fail" ? "failing" : "warning"}${n > 1 ? "s" : ""}`;
-      return h("a", { class: `chip live ${w === "info" ? "ok" : w}`, href: "#data" }, h("span", { class: "dot" }), text);
-    }
-    return h("span", { class: "chip" }, `Updated ${fmt.ago(s.generated_at)}`);
+    const w = worst(s.data.checks);
+    const n = s.data.checks.filter((c) => c.status === w).length;
+    const tone = w === "info" ? "ok" : w;
+    const text = tone === "ok" ? "all systems nominal" : `${n} ${w === "fail" ? "check failing" : "warning"}${n > 1 ? "s" : ""}`;
+    return { tone, text };
   }
 
   function seg(options, value, onChange, label) {
@@ -338,12 +338,10 @@
   }
 
   function pageHead(app, title, meta) {
-    return h("div", {},
-      h("a", { class: "btn ghost back", href: "#" }, icon("back"), "Home"),
-      h("div", { class: "page-head" },
-        h("div", { class: `tile ${app.tone}` }, icon(app.id)),
-        h("div", {}, h("div", { class: "eyebrow" }, app.name), h("h1", {}, title)),
-        h("div", { class: "meta small muted" }, meta || `Snapshot ${fmt.ago(state.snap.generated_at)}`)));
+    return h("div", { class: "page-head" },
+      pimg(app.id),
+      h("div", {}, h("span", { class: "hl-label" }, app.name), h("h1", {}, title)),
+      h("div", { class: "meta" }, meta || `Snapshot ${fmt.ago(state.snap.generated_at)}`));
   }
 
   const section = (title, aside, ...body) =>
@@ -378,7 +376,7 @@
   };
   const heatStyle = (x, max) => {
     const a = Math.max(0, Math.min(1, x / max));
-    return { background: `color-mix(in srgb, var(--cherenkov) ${Math.round(a * 38)}%, transparent)` };
+    return { background: `color-mix(in srgb, var(--cyan) ${Math.round(a * 38)}%, transparent)` };
   };
 
   // ---------- charts ----------
@@ -405,7 +403,7 @@
       const pts = s.points.map((p) => `${x(p[0])},${y(p[1])}`).join(" ");
       svg.append(h("polyline", { class: `s${k}`, points: pts, fill: "none", "stroke-width": s.bold ? 2.6 : 1.8, "stroke-linejoin": "round", "stroke-dasharray": s.dash ? "4 4" : null }));
       const last = s.points[s.points.length - 1];
-      if (last) svg.append(h("circle", { class: `s${k}`, cx: x(last[0]), cy: y(last[1]), r: s.bold ? 4 : 3, style: { fill: "var(--panel)" }, "stroke-width": 2 }));
+      if (last) svg.append(h("circle", { class: `s${k}`, cx: x(last[0]), cy: y(last[1]), r: s.bold ? 4 : 3, style: { fill: "#000" }, "stroke-width": 2 }));
     });
     return h("div", {}, svg, h("div", { class: "legend" }, series.map((s, i) => h("span", {}, h("i", { class: `k${s.k ?? i}` }), s.name))));
   }
@@ -421,40 +419,37 @@
   }
 
   // ---------- views ----------
-  function viewHome() {
+  const HOME = { id: "home", name: "Stats Nuke", pix: "home", view: viewHomeWin };
+  const appById = (id) => (id === "home" ? HOME : APPS.find((a) => a.id === id));
+  const link = (id, text) => h("a", { href: `#${id}`, onclick: (e) => { e.preventDefault(); openWin(id); } }, text);
+
+  function viewHomeWin() {
     const s = state.snap;
     const plan = s.plan;
     const scored = s.team.filter((w) => w.points != null);
     const ours = scored.reduce((a, w) => a + w.points, 0);
     const avg = scored.reduce((a, w) => a + (w.average || 0), 0);
-    const bs = s.bets.summary;
-    const facts = [
-      ["Next deadline", s.next.gw ? fmt.until(s.next.deadline) : "Season over", s.next.gw ? `GW${s.next.gw} · ${fmt.date(s.next.deadline)}` : ""],
-      ["Model team", plan ? `${fmt.n(plan.expected_points)} xP` : "–", plan ? `Captain ${pinfo(plan.captain).name}${plan.provisional ? " · provisional" : ""}` : "No plan yet"],
-      ["Season", scored.length ? `${ours} pts` : "Starts GW6", scored.length ? `${fmt.signed(ours - avg)} vs average manager` : "First decision 30 h before the deadline"],
-      ["Paper ledger", `${s.bets.bets.length} bets`, bs.bets ? `CLV ${fmt.spct(bs.mean_clv)} over ${bs.bets} settled` : "Waiting for closing prices"],
-    ];
-    const tile = (a, i) => {
-      const badge = a.id === "access" ? state.requests.filter((r) => r.role === "pending").length : 0;
-      return h("a", { class: "app pop", href: `#${a.id}`, style: { animationDelay: `${0.05 + i * 0.045}s` } },
-        h("div", { class: `tile ${a.tone}` }, icon(a.id), badge ? h("span", { class: "badge" }, badge) : null, a.admin ? h("span", { class: "lock" }, icon("lock")) : null),
-        h("div", { class: "label" }, a.name), h("div", { class: "sub" }, a.sub(s)));
-    };
-    const apps = visibleApps();
-    return h("main", { class: "wrap view" },
-      topbar(),
-      h("div", { class: "hero" },
-        h("div", { class: "eyebrow" }, `Season ${s.season.replace("-", "/")}${s.next.gw ? ` · Gameweek ${s.next.gw}` : ""}`),
-        h("h1", {}, s.next.gw ? ["Gameweek ", s.next.gw, " locks in ", h("em", {}, fmt.until(s.next.deadline)), "."] : "The season is over."),
-        h("p", {}, "Model v2 forecasts every player, plays its own FPL team against real managers and paper-trades the odds. Everything here refreshes every three hours.")),
-      h("div", { class: "strip" }, facts.map(([k, v, d]) => h("div", { class: "fact" }, h("div", { class: "eyebrow" }, k), h("div", { class: "v" }, v), h("div", { class: "d" }, d)))),
-      h("div", { class: "group" }, h("div", { class: "group-head" }, h("div", { class: "eyebrow" }, "Apps")),
-        h("div", { class: "apps" }, apps.filter((a) => !a.admin).map(tile))),
+    const bt = s.benchmarks.backtest;
+    const pending = state.requests.filter((r) => r.role === "pending").length;
+    const st = systemStatus();
+    return h("div", { class: "prose" },
+      h("div", { class: "who-row" }, pimg("home"), h("div", {},
+        h("span", { class: "hl-label" }, "What?"),
+        h("div", {}, "I'm ", h("b", {}, "Stats Nuke"), ": a ", link("players", "forecasting system"), " for Fantasy Premier League and a ", link("ledger", "paper betting ledger"), "."))),
+      h("p", {}, "Model v2 forecasts every player five gameweeks out, plays its own FPL team against real managers, and paper-trades the odds. Nothing is ever staked."),
+      s.next.gw
+        ? h("p", {}, "Gameweek ", s.next.gw, " locks in ", h("b", {}, fmt.until(s.next.deadline)), ". ",
+          plan ? ["The model team expects ", h("b", {}, fmt.n(plan.expected_points)), " points with ", h("b", {}, pinfo(plan.captain).name), " as captain. "] : "The plan appears within 12 hours. ",
+          link("gameweek", "See the plan"), ".")
+        : h("p", {}, "The season is over."),
+      h("p", {}, scored.length
+        ? ["Season so far: ", h("b", {}, `${ours} points`), `, ${fmt.signed(ours - avg)} against the average manager. `, link("team", "The model team"), " · ", link("benchmarks", "how it stacks up"), "."]
+        : ["The model team starts at the GW", s.next.gw, " deadline with £100m. ", link("benchmarks", "Benchmarks"), " follow it against managers at p50, p90 and p99, and against OpenFPL."]),
+      h("p", {}, "In the season-replay backtest (", bt.seasons, ") it beat the OpenFPL replica by ", h("b", {}, `${fmt.signed(bt.replay_vs_openfpl.per_gw, 2)} points a gameweek`), ". ", link("lab", "Every experiment"), " is in the lab, kept or not."),
       isAdmin()
-        ? h("div", { class: "group" }, h("div", { class: "group-head" }, h("div", { class: "eyebrow" }, "Control room"), h("div", { class: "small muted" }, "Only you see these")),
-          h("div", { class: "apps" }, apps.filter((a) => a.admin).map((a, i) => tile(a, i + 8))))
+        ? h("p", {}, "System: ", h("span", { class: `chip ${st.tone}` }, st.text), " ", link("health", "Health"), " · ", link("data", "Data"), " · ", link("access", `Access${pending ? ` (${pending} waiting)` : ""}`))
         : null,
-    );
+      h("p", { class: "muted" }, `Snapshot ${fmt.ago(s.generated_at)}. Refreshes every three hours.`, h("span", { class: "blink" }, " _")));
   }
 
   function pitch(plan, valueOf) {
@@ -792,7 +787,7 @@
     } catch {
       state.runs = { live: false, at: state.snap.generated_at, runs: state.snap.health.runs || [] };
     }
-    if (location.hash === "#health") render();
+    if (WM.wins.some((w) => w.id === "health")) render();
   }
 
   function viewHealth(app) {
@@ -869,7 +864,7 @@
       tabs[u.tab].length
         ? h("div", { class: "card flush" }, h("div", { class: "list" }, tabs[u.tab].map((r) =>
           h("div", { class: "row" },
-            h("div", { class: "status-orb", style: { width: "40px", height: "40px", margin: 0 } }, h("b", {}, (r.name || r.email || "?").trim()[0].toUpperCase())),
+            h("div", { class: "avatar" }, (r.name || r.email || "?").replace(/^Example:\s*/, "").trim()[0].toUpperCase()),
             h("div", {}, h("div", { class: "t" }, r.name || "No name", r.role === "admin" ? h("span", { class: "chip accent", style: { marginLeft: "8px" } }, "Owner") : null),
               h("div", { class: "d" }, r.email), r.note ? h("div", { class: "d" }, `“${r.note}”`) : null, h("div", { class: "d" }, `Requested ${fmt.ago(r.requested_at)}`)),
             r.role === "admin" ? null
@@ -881,24 +876,265 @@
     return out;
   }
 
-  // ---------- gate (signed out, pending, declined) ----------
-  const gateUi = { tab: "signin", msg: "", busy: false };
+  // ---------- desktop (built once: stars, monument, clouds) ----------
+  const Desk = { ui: null };
+  function buildDesktop() {
+    if (Desk.ui) return;
+    const stars = h("canvas", { class: "stars", "aria-hidden": "true" });
+    const monument = h("div", { class: "monument", "aria-hidden": "true" },
+      h("div", { class: "portal" }), h("div", { class: "pillar" }), h("div", { class: "reactor" }, h("div", { class: "halo" }), trefoil("", true)));
+    const clouds = h("div", { class: "clouds", "aria-hidden": "true" },
+      [[8, -30, 26, 90], [22, -40, 30, 110], [38, -26, 26, 90], [52, -38, 30, 110], [66, -30, 26, 90], [30, -10, 16, 50], [58, -12, 14, 46]].map(([l, b, w, ht], i) =>
+        h("i", { style: { left: `${l}%`, bottom: `${b}%`, width: `${w}%`, height: `${ht}%`, animationDelay: `${-i * 2.7}s` } })));
+    Desk.ui = h("div", { class: "ui" });
+    root().append(h("div", { class: "desktop" }, stars, monument, clouds, Desk.ui), h("div", { class: "scanlines", "aria-hidden": "true" }));
+    starfield(stars);
+  }
+
+  function starfield(canvas) {
+    const g = canvas.getContext("2d");
+    if (!g) return;
+    let pts = [];
+    const draw = () => {
+      g.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of pts) { g.fillStyle = `rgba(255,255,255,${p.a})`; g.fillRect(p.x, p.y, p.s, p.s); }
+    };
+    const size = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = canvas.clientHeight * dpr;
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const n = Math.round((canvas.width * canvas.height) / (5200 * dpr * dpr));
+      pts = Array.from({ length: n }, () => ({ x: rnd() * canvas.width, y: rnd() * canvas.height, s: (rnd() < 0.85 ? 1 : 2) * dpr, a: 0.25 + rnd() * 0.75 }));
+      draw();
+    };
+    size();
+    window.addEventListener("resize", size);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      setInterval(() => { for (let i = 0; i < 6 && pts.length; i++) { const p = pts[Math.floor(Math.random() * pts.length)]; p.a = 0.2 + Math.random() * 0.8; } draw(); }, 160);
+  }
+
+  // ---------- window manager ----------
+  const WM = { wins: [], z: 20, active: null, start: false, scroll: {}, sel: null };
+  const deskSize = () => { const d = $(".desktop"); return { w: d.clientWidth, h: d.clientHeight }; };
+  const small = () => window.innerWidth <= 720;
+
+  function place(id) {
+    if (WM.wins.some((w) => w.id === id)) return;
+    const { w: dw, h: dh } = deskSize();
+    const home = id === "home";
+    const ww = Math.min(home ? 600 : 960, dw - 24);
+    const wh = home ? Math.min(470, dh - Math.round(dh * 0.3) - 16) : Math.min(680, dh - 16);
+    const k = WM.wins.length % 6;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+    WM.wins.push({
+      id, w: ww, h: wh, min: false, max: false, z: ++WM.z, fresh: true,
+      x: clamp((dw - ww) / 2 + (home ? 0 : 40 + k * 26), 0, Math.max(0, dw - ww)),
+      y: clamp(home ? Math.round(dh * 0.3) : (dh - wh) / 2 - 10 + k * 22, 0, Math.max(0, dh - wh)),
+    });
+  }
+  function setHash(id) {
+    try { history.replaceState(null, "", id === "home" ? location.pathname + location.search : `#${id}`); } catch { /* sandboxed */ }
+  }
+  function openWin(id) {
+    if (!appById(id) || (appById(id).admin && !isAdmin())) return;
+    place(id);
+    const w = WM.wins.find((x) => x.id === id);
+    w.min = false;
+    w.z = ++WM.z;
+    WM.active = id;
+    WM.start = false;
+    setHash(id);
+    render();
+  }
+  function topWin() {
+    const open = WM.wins.filter((w) => !w.min).sort((a, b) => b.z - a.z);
+    return open.length ? open[0].id : null;
+  }
+  function closeWin(id) {
+    WM.wins = WM.wins.filter((w) => w.id !== id);
+    delete WM.scroll[id];
+    WM.active = topWin();
+    setHash(WM.active || "home");
+    render();
+  }
+  function minWin(id) {
+    const w = WM.wins.find((x) => x.id === id);
+    if (w) w.min = true;
+    WM.active = topWin();
+    render();
+  }
+  function maxWin(id) {
+    const w = WM.wins.find((x) => x.id === id);
+    if (w) w.max = !w.max;
+    render();
+  }
+  function focusWin(id) {
+    if (WM.active === id) return;
+    const w = WM.wins.find((x) => x.id === id);
+    if (!w) return;
+    w.z = ++WM.z;
+    WM.active = id;
+    setHash(id);
+    document.querySelectorAll(".win[data-win]").forEach((el) => {
+      const on = el.dataset.win === id;
+      el.classList.toggle("active", on);
+      if (on) el.style.zIndex = w.z;
+    });
+    document.querySelectorAll(".tb-wins .tb-btn").forEach((b) => b.classList.toggle("on", b.dataset.win === id));
+  }
+  function startDrag(e, w) {
+    if (e.button !== 0 || e.target.closest(".wbtn") || w.max || small()) return;
+    const el = e.currentTarget.parentElement;
+    const { w: dw, h: dh } = deskSize();
+    const ox = e.clientX - w.x, oy = e.clientY - w.y;
+    const move = (ev) => {
+      w.x = Math.min(Math.max(ev.clientX - ox, 80 - w.w), dw - 80);
+      w.y = Math.min(Math.max(ev.clientY - oy, 0), dh - 28);
+      el.style.left = `${w.x}px`;
+      el.style.top = `${w.y}px`;
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    e.preventDefault();
+  }
+
+  const GLYPH = {
+    min: '<svg viewBox="0 0 10 10"><rect x="1" y="7" width="6" height="2" fill="#000"/></svg>',
+    max: '<svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="8" fill="none" stroke="#000"/><rect x="0.5" y="0.5" width="9" height="2" fill="#000"/></svg>',
+    restore: '<svg viewBox="0 0 10 10"><rect x="2.5" y="0.5" width="7" height="6" fill="none" stroke="#000"/><rect x="0.5" y="3.5" width="7" height="6" fill="#c0c0c0" stroke="#000"/><rect x="0.5" y="3.5" width="7" height="1.5" fill="#000"/></svg>',
+    close: '<svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="#000" stroke-width="1.8"/></svg>',
+  };
+  const glyph = (k) => { const s = h("span", { "aria-hidden": "true" }); s.innerHTML = GLYPH[k]; return s.firstChild; };
+
+  function winEl(w) {
+    const app = appById(w.id);
+    let content;
+    try { content = [app.view(app)].flat(); }
+    catch (e) { console.error(e); content = [empty("x", "This window could not be drawn", e.message)]; }
+    const s = state.snap;
+    const el = h("section", {
+      class: `win${w.max ? " max" : ""}${WM.active === w.id ? " active" : ""}${w.fresh ? " opening" : ""}`,
+      "data-win": w.id, role: "dialog", "aria-label": app.name,
+      style: { left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px`, zIndex: w.z },
+      onpointerdown: () => focusWin(w.id),
+    },
+      h("div", { class: "titlebar", onpointerdown: (e) => startDrag(e, w), ondblclick: () => maxWin(w.id) },
+        pimg(app.pix || app.id), h("span", { class: "ttl" }, `C:/statsnuke/${w.id}`),
+        h("button", { class: "wbtn", "aria-label": "Minimise", onclick: () => minWin(w.id) }, glyph("min")),
+        h("button", { class: "wbtn maxb", "aria-label": w.max ? "Restore" : "Maximise", onclick: () => maxWin(w.id) }, glyph(w.max ? "restore" : "max")),
+        h("button", { class: "wbtn close", "aria-label": "Close", onclick: () => closeWin(w.id) }, glyph("close"))),
+      h("div", { class: "win-body" }, h("div", { class: "screen", "data-screen": w.id }, content)),
+      h("div", { class: "statusbar" },
+        h("span", {}, `Snapshot ${fmt.ago(s.generated_at)}`),
+        h("span", {}, s.next.gw ? `GW${s.next.gw} in ${fmt.until(s.next.deadline)}` : "Season over"),
+        h("span", {}, state.me.role === "admin" ? "Owner" : "Friend")));
+    w.fresh = false;
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => { if (!w.max && !small() && el.isConnected && el.offsetWidth) { w.w = el.offsetWidth; w.h = el.offsetHeight; } }).observe(el);
+    }
+    return el;
+  }
+
+  // ---------- desktop pieces ----------
+  function dicon(a, i) {
+    const badge = a.id === "access" ? state.requests.filter((r) => r.role === "pending").length : 0;
+    return h("button", {
+      class: `dicon pop${WM.sel === a.id ? " sel" : ""}`, style: { animationDelay: `${0.04 * i}s` }, title: a.name,
+      onclick: () => { WM.sel = a.id; openWin(a.id); },
+    }, pimg(a.pix || a.id), badge ? h("span", { class: "badge" }, badge) : null, a.admin ? pimg("lock", "lock") : null, h("span", { class: "lbl" }, a.name));
+  }
+
+  function clockText() {
+    return new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  function taskbar(locked) {
+    const start = h("button", {
+      class: `tb-btn start${WM.start ? " on" : ""}`, "aria-haspopup": "menu", "aria-expanded": String(WM.start), disabled: locked || null,
+      onclick: (e) => { e.stopPropagation(); WM.start = !WM.start; render(); },
+    }, trefoil(""), "Start");
+    const wins = h("div", { class: "tb-wins" }, locked ? [] : WM.wins.map((w) => {
+      const app = appById(w.id);
+      return h("button", {
+        class: `tb-btn${WM.active === w.id && !w.min ? " on" : ""}`, "data-win": w.id,
+        onclick: () => (WM.active === w.id && !w.min ? minWin(w.id) : openWin(w.id)),
+      }, pimg(app.pix || app.id), h("span", {}, app.name));
+    }));
+    let status = null;
+    if (!locked && state.snap) {
+      if (isAdmin()) {
+        const st = systemStatus();
+        const color = { ok: "#22b14c", warn: "#ffb02e", fail: "#e02020" }[st.tone];
+        status = h("a", { href: "#data", title: st.text, onclick: (e) => { e.preventDefault(); openWin("data"); } }, h("span", { class: "led", style: { background: color } }), h("span", { class: "stat-text" }, st.text));
+      } else {
+        status = h("span", { class: "stat-text" }, `Updated ${fmt.ago(state.snap.generated_at)}`);
+      }
+    }
+    return h("div", { class: "taskbar" }, start, wins, h("div", { class: "tray" }, status, h("span", { class: "clock" }, clockText())));
+  }
+
+  function startMenu() {
+    const item = (a) => h("button", { role: "menuitem", onclick: () => openWin(a.id) }, pimg(a.pix || a.id), a.name);
+    return h("div", { class: "start-menu", role: "menu", onclick: (e) => e.stopPropagation() },
+      h("div", { class: "start-banner" }, h("b", {}, "Stats"), "Nuke"),
+      h("div", { class: "start-items" },
+        item(HOME), visibleApps().filter((a) => !a.admin).map(item),
+        isAdmin() ? [h("hr"), visibleApps().filter((a) => a.admin).map(item)] : null,
+        h("hr"),
+        h("div", { class: "who" }, `Signed in as ${state.me.name || state.me.email || "you"}`, h("br"), state.me.role === "admin" ? "Owner" : "Friend"),
+        h("button", { role: "menuitem", onclick: signOut }, pimg("lock"), "Shut down (sign out)…")));
+  }
+
+  async function signOut() {
+    await state.api.signOut();
+    state.me = null;
+    state.snap = null;
+    WM.wins = [];
+    WM.active = null;
+    WM.start = false;
+    render();
+  }
+
+  // ---------- dialogs: sign in, request access, waiting ----------
+  function dialog(title, pix, body, onClose) {
+    return h("section", { class: "win dialog active", role: "dialog", "aria-label": title },
+      h("div", { class: "titlebar" }, pimg(pix), h("span", { class: "ttl" }, title),
+        onClose ? h("button", { class: "wbtn close", "aria-label": "Close", onclick: onClose }, glyph("close")) : null),
+      h("div", { class: "win-body" }, body));
+  }
+
+  const gateUi = { tab: "signin", busy: false };
   function viewGate() {
     const u = gateUi;
-    const configured = state.api.mode !== "none";
-    const field = (id, label, type, extra) => h("div", { class: "field" }, h("label", { for: id }, label), h(type === "textarea" ? "textarea" : "input", { class: "input", id, name: id, type: type === "textarea" ? null : type, ...extra }));
-    const err = h("div", { class: "err", role: "alert" }, u.msg);
+    const api = state.api;
+    if (api.mode === "none")
+      return dialog("Stats Nuke", "data", h("div", { class: "dlg-grid" }, pimg("data"), h("div", { class: "form" },
+        h("p", {}, "This site isn't connected to its database yet."),
+        h("p", { class: "dlg-note" }, "The owner adds the Supabase URL and public key as repository variables and redeploys (web/README.md)."))));
+    if (u.tab === "confirm")
+      return dialog("Confirm your email", "wait", h("div", { class: "dlg-grid" }, pimg("wait"), h("div", { class: "form" },
+        h("p", {}, "We sent you a link. Open it, then sign in here. Your request reaches the owner once your email is confirmed."),
+        h("div", { class: "dlg-actions" }, h("button", { class: "btn primary", onclick: () => { u.tab = "signin"; render(); } }, "OK")))));
+    const friend = u.tab === "friend";
+    const field = (id, label, type, extra) => h("div", { class: `field${type === "textarea" ? " top" : ""}` }, h("label", { for: id }, label),
+      h(type === "textarea" ? "textarea" : "input", { class: "input", id, name: id, type: type === "textarea" ? null : type, ...extra }));
+    const err = h("div", { class: "err", role: "alert" });
     const submit = async (e) => {
       e.preventDefault();
       if (u.busy) return;
       const f = e.target;
-      u.busy = true; err.textContent = "";
+      u.busy = true;
+      err.textContent = "";
       try {
-        if (u.tab === "signin") await state.api.signIn(f.email.value.trim(), f.password.value);
+        if (!friend) await api.signIn(f.email.value.trim(), f.password.value);
         else {
+          if (!f.name.value.trim()) throw new Error("Please enter your name.");
           if (f.password.value.length < 8) throw new Error("Use a password of at least 8 characters.");
-          const r = await state.api.signUp(f.name.value.trim(), f.email.value.trim(), f.password.value, f.note.value.trim());
-          if (r.confirm) { u.msg = ""; u.tab = "confirm"; u.busy = false; render(); return; }
+          const r = await api.signUp(f.name.value.trim(), f.email.value.trim(), f.password.value, f.note.value.trim());
+          if (r.confirm) { u.busy = false; u.tab = "confirm"; render(); return; }
         }
         u.busy = false;
         await boot(true);
@@ -907,68 +1143,65 @@
         err.textContent = ex.message || "Something went wrong.";
       }
     };
-    let body;
-    if (!configured) {
-      body = h("div", { class: "card", style: { display: "grid", gap: "12px" } }, h("div", { class: "pname" }, "The site isn't connected to its database yet"),
-        h("p", { class: "small muted" }, "The owner adds the Supabase URL and public key as repository variables and redeploys. Setup steps are in web/README.md."));
-    } else if (u.tab === "confirm") {
-      body = h("div", { class: "card", style: { display: "grid", gap: "16px", textAlign: "center" } }, h("div", { class: "status-orb" }, icon("inbox")),
-        h("div", { class: "pname" }, "Confirm your email"), h("p", { class: "small muted" }, "We sent you a link. Open it, then sign in here. Your request reaches the owner as soon as your email is confirmed."),
-        h("button", { class: "btn", onclick: () => { u.tab = "signin"; render(); } }, "Back to sign in"));
-    } else {
-      body = h("div", { class: "card", style: { display: "grid", gap: "20px" } },
-        seg(["signin", "friend"], u.tab, (v) => { u.tab = v; u.msg = ""; render(); }, (v) => (v === "signin" ? "Sign in" : "I'm a friend")),
-        h("form", { class: "form", onsubmit: submit, novalidate: true },
-          u.tab === "friend" ? [field("name", "Your name", "text", { required: true, autocomplete: "name", maxlength: 80 })] : null,
-          field("email", "Email", "email", { required: true, autocomplete: "email" }),
-          field("password", "Password", "password", { required: true, autocomplete: u.tab === "signin" ? "current-password" : "new-password", minlength: 8 }),
-          u.tab === "friend" ? field("note", "A note for the owner (optional)", "textarea", { maxlength: 280, placeholder: "How you know them, which league you play in" }) : null,
-          err,
-          h("button", { class: "btn primary", type: "submit" }, u.tab === "signin" ? "Sign in" : "Request access")),
-        u.tab === "friend" ? h("p", { class: "small muted" }, "The owner approves each request. You can sign in as soon as you're approved.") : null);
-    }
-    return h("main", { class: "gate view" }, h("div", { class: "gate-card" },
-      h("div", { class: "gate-brand" }, trefoil("mark"), h("div", { class: "wordmark" }, "Stats Nuke"), h("p", {}, "FPL forecasts, a model team that plays the real game, and a paper betting ledger.")),
-      body,
-      state.api.mode === "preview" ? h("p", { class: "small muted", style: { textAlign: "center" } }, "Preview: any email and password signs you in as the owner.") : null));
+    const form = h("form", { class: "form", onsubmit: submit, novalidate: true },
+      h("p", {}, friend ? "Ask for access. The owner approves each request; you can sign in as soon as you're approved." : "Type your email and password to log on to Stats Nuke."),
+      friend ? field("name", "Your name:", "text", { required: true, autocomplete: "name", maxlength: 80 }) : null,
+      field("email", "Email:", "email", { required: true, autocomplete: "email" }),
+      field("password", "Password:", "password", { required: true, autocomplete: friend ? "new-password" : "current-password", minlength: 8 }),
+      friend ? field("note", "Note:", "textarea", { maxlength: 280, placeholder: "How you know the owner, your league" }) : null,
+      err,
+      h("div", { class: "dlg-actions" },
+        h("button", { class: "btn primary", type: "submit" }, friend ? "Send request" : "OK"),
+        h("button", { class: "btn", type: "button", onclick: () => { u.tab = friend ? "signin" : "friend"; render(); } }, friend ? "Cancel" : "I'm a friend…")),
+      api.mode === "preview" ? h("p", { class: "dlg-note" }, "Preview: any email and password signs you in as the owner.") : null);
+    return dialog(friend ? "Request access" : "Welcome to Stats Nuke", friend ? "players" : "access", h("div", { class: "dlg-grid" }, pimg(friend ? "players" : "access"), form));
   }
 
   function viewWaiting() {
     const declined = state.me.role === "rejected";
     const api = state.api;
-    return h("main", { class: "gate view" }, h("div", { class: "gate-card" },
-      h("div", { class: "gate-brand" }, trefoil("mark"), h("div", { class: "wordmark" }, "Stats Nuke")),
-      h("div", { class: "card", style: { display: "grid", gap: "16px", textAlign: "center" } },
-        h("div", { class: "status-orb", style: declined ? { background: "var(--fail-soft)", color: "var(--fail)" } : null }, icon(declined ? "x" : "clock")),
-        h("div", { class: "pname" }, declined ? "Your request was declined" : "Request sent"),
-        h("p", { class: "small muted" }, declined ? "Ask the owner if you think this is a mistake." : `Thanks${state.me.name ? `, ${state.me.name}` : ""}. You'll get in as soon as the owner approves. This page checks every 20 seconds.`),
+    return dialog(declined ? "Access declined" : "Request sent", declined ? "lock" : "wait", h("div", { class: "dlg-grid" }, pimg(declined ? "lock" : "wait"), h("div", { class: "form" },
+      h("p", {}, declined ? "The owner declined your request. Ask them if you think this is a mistake." : `Thanks${state.me.name ? `, ${state.me.name}` : ""}. You'll get in as soon as the owner approves. This window checks every 20 seconds.`),
+      declined ? null : h("div", { class: "marquee", "aria-hidden": "true" }, h("i")),
+      h("div", { class: "dlg-actions" },
         api.mode === "preview" && !declined ? h("button", { class: "btn primary", onclick: async () => { api.simulateApproval(); await boot(true); } }, "Preview: approve me") : null,
-        h("button", { class: "btn ghost", onclick: async () => { await api.signOut(); state.me = null; render(); } }, icon("out"), "Sign out"))));
+        h("button", { class: "btn", onclick: signOut }, "Sign out")))));
   }
 
   // ---------- render / boot ----------
   function render() {
-    const el = root();
-    el.replaceChildren();
+    buildDesktop();
+    const ui = Desk.ui;
+    ui.querySelectorAll("[data-screen]").forEach((el) => (WM.scroll[el.dataset.screen] = el.scrollTop));
+    ui.replaceChildren();
     clearInterval(render.poll);
-    if (!state.me) { el.append(viewGate()); return; }
+    if (!state.me) { ui.append(viewGate(), taskbar(true)); return; }
     if (state.me.role === "pending" || state.me.role === "rejected") {
-      el.append(viewWaiting());
-      if (state.me.role === "pending") render.poll = setInterval(async () => { const me = await state.api.me(); if (me && me.role !== "pending") boot(true); }, 20000);
+      ui.append(viewWaiting(), taskbar(true));
+      if (state.me.role === "pending")
+        render.poll = setInterval(async () => { const me = await state.api.me(); if (me && me.role !== "pending") boot(true); }, 20000);
       return;
     }
     if (!state.snap) {
-      el.append(h("main", { class: "gate view" }, h("div", { class: "gate-card" }, empty("data", "No data published yet", "The Live workflow uploads the first snapshot on its next run."))));
+      ui.append(dialog("Stats Nuke", "data", h("div", { class: "dlg-grid" }, pimg("data"), h("div", { class: "form" },
+        h("p", {}, "No data published yet. The Live workflow uploads the first snapshot on its next run."),
+        h("div", { class: "dlg-actions" }, h("button", { class: "btn", onclick: signOut }, "Sign out"))))), taskbar(true));
       return;
     }
-    const id = location.hash.replace(/^#/, "");
-    const app = visibleApps().find((a) => a.id === id);
-    if (!app) { el.append(viewHome()); return; }
-    el.append(h("main", { class: "wrap view" }, topbar(), ...[app.view(app)].flat()));
+    const apps = visibleApps();
+    const left = [HOME, ...apps.filter((a) => !a.admin).slice(0, 5)];
+    const right = apps.filter((a) => !left.includes(a));
+    ui.append(
+      h("div", { class: "icon-wrap" }, h("div", { class: "icons left" }, left.map(dicon)), h("div", { class: "icons right" }, right.map((a, i) => dicon(a, i + left.length)))),
+      ...WM.wins.filter((w) => !w.min).map(winEl),
+      taskbar(false),
+      ...(WM.start ? [startMenu()] : []),
+    );
+    ui.querySelectorAll("[data-screen]").forEach((el) => { if (WM.scroll[el.dataset.screen]) el.scrollTop = WM.scroll[el.dataset.screen]; });
   }
 
   async function boot(quiet) {
-    if (!quiet) Loader.step("Connecting", 0.2);
+    if (!quiet) Loader.step("Connecting to the server", 0.25);
     try {
       state.me = await state.api.me();
       if (!quiet) Loader.step("Verifying access", 0.5);
@@ -977,6 +1210,12 @@
         state.snap = await state.api.snapshot();
         state.pmap = null;
         if (state.me.role === "admin") state.requests = await state.api.requests();
+        if (state.snap && !WM.wins.length) {
+          buildDesktop();
+          if (!small()) { place("home"); WM.active = "home"; }
+          const want = location.hash.replace(/^#/, "");
+          if (want && want !== "home" && appById(want) && (!appById(want).admin || isAdmin())) { place(want); WM.active = want; }
+        }
       }
     } catch (e) {
       console.error(e);
@@ -987,13 +1226,15 @@
 
   async function main() {
     Loader.mount();
-    document.addEventListener("click", () => document.querySelectorAll(".menu-pop").forEach((p) => (p.hidden = true)));
     if (CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase) state.api = supabaseBackend();
     else if (EMBEDDED) state.api = previewBackend();
     else state.api = { mode: "none", async me() { return null; } };
+    buildDesktop();
     await boot(false);
     await Loader.done();
-    window.addEventListener("hashchange", () => { render(); window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" }); });
+    document.addEventListener("click", () => { if (WM.start) { WM.start = false; render(); } });
+    window.addEventListener("hashchange", () => { const id = location.hash.replace(/^#/, ""); if (id && state.snap) openWin(id); });
+    setInterval(() => document.querySelectorAll(".clock").forEach((c) => (c.textContent = clockText())), 15000);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", main);

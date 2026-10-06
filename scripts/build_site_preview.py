@@ -13,8 +13,8 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 FONTS = (
-    "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900"
-    "&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap"
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600"
+    "&family=VT323&display=swap"
 )
 
 
