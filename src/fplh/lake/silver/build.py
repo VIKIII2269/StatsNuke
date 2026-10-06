@@ -185,6 +185,7 @@ def assemble(
         "fpl_player_season": _concat(fpl_players),
         "snap_fpl_player": snap,
         "fpl_event": events,
+        "snap_props": odds_api.normalise_props(lake, teams),
         **{name: _concat(frames) for name, frames in us_tables.items()},
     }
     return _resolve(t, teams, notes), notes

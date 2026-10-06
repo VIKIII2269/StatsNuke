@@ -1007,3 +1007,51 @@ def live_bets_cmd(
     typer.echo(text)
     if not new.empty or int(book["settled"].sum()) > settled_before:
         _append(report, text)
+
+
+@live_app.command("props")
+def live_props_cmd(
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    report: Annotated[Path | None, typer.Option(help="Append the markdown here.")] = None,
+) -> None:
+    """Anytime-scorer forward test: our P(score) against the bookmakers (A11)."""
+    import pandas as pd
+
+    from fplh.features.information_set import SilverStore
+    from fplh.lake.parquet import read_parquet
+    from fplh.live.props import evaluate, match_players, props_section
+
+    lake = Lake(get_settings().lake_uri)
+    store = SilverStore(lake)
+    props = store.get("snap_props")
+    if props.empty or (props["season"] == season).sum() == 0:
+        typer.echo("no anytime-scorer captures yet")
+        return
+    props = props[props["season"] == season]
+    snap = store.get("snap_fpl_player")
+    snap = snap[snap["season"] == season].sort_values("observed_at")
+    snap = snap.drop_duplicates("code", keep="last")
+    names = store.get("dim_player")
+    players = snap.assign(player_uid="fpl:" + snap["code"].astype(str))[["player_uid", "team"]]
+    players = players.merge(names, on="player_uid", how="left")
+    matched = match_players(props, players)
+    keys = [k for k in lake.list(f"state/forecast/{season}/") if k.endswith(".parquet")]
+    if not keys:
+        typer.echo("no stored forecasts yet")
+        return
+    forecasts = pd.concat([read_parquet(lake, k) for k in keys], ignore_index=True)
+    if "p_play" not in forecasts or "p_goal" not in forecasts:
+        typer.echo("stored forecasts lack p_goal / p_play")
+        return
+    forecasts = forecasts[forecasts["horizon"] == 1] if "horizon" in forecasts else forecasts
+    pm = store.get("fact_player_match")
+    outcomes = pm[pm["season"] == season][["player_uid", "fixture_uid", "minutes", "goals_scored"]]
+    rows, summary = evaluate(matched, forecasts, outcomes)
+    text = props_section(summary, rows)
+    typer.echo(text or "no finished fixture with both a forecast and prices yet")
+    state_key = "state/props_eval.json"
+    seen = json.loads(lake.get_bytes(state_key))["gws"] if lake.exists(state_key) else []
+    gws = sorted(int(g) for g in summary["gw"]) if not summary.empty else []
+    if gws and gws != seen:
+        _append(report, text)
+        lake.put_bytes(state_key, json.dumps({"gws": gws}).encode(), overwrite=True)

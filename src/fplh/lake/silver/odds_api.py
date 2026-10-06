@@ -61,3 +61,48 @@ def normalise(lake: Lake, teams: TeamResolver) -> pd.DataFrame:
                             }
                         )
     return pd.DataFrame(rows)
+
+
+PROP_MARKET = "player_goal_scorer_anytime"
+
+
+def normalise_props(lake: Lake, teams: TeamResolver) -> pd.DataFrame:
+    """Anytime-scorer prices from the event endpoint → ``snap_props`` (one row per
+    capture, fixture, book and player; observed at fetch time)."""
+    rows = []
+    for key in list_bronze(lake, SOURCE, "event_odds"):
+        meta, payload = read_bronze(lake, key)
+        if meta["http_status"] != 200:
+            continue
+        obs = pd.Timestamp(meta["observed_at_us"])
+        ev = json.loads(payload)
+        if not isinstance(ev, dict) or "home_team" not in ev:
+            continue
+        kickoff = pd.Timestamp(ev["commence_time"])
+        start = kickoff.year if kickoff.month >= 7 else kickoff.year - 1
+        home, away = teams.uid(ev["home_team"]), teams.uid(ev["away_team"])
+        season = season_label(start)
+        for book in ev.get("bookmakers", []):
+            for market in book.get("markets", []):
+                if market.get("key") != PROP_MARKET:
+                    continue
+                for o in market.get("outcomes", []):
+                    if str(o.get("name", "Yes")).lower() not in ("yes", "over"):
+                        continue
+                    player = o.get("description") or o.get("name")
+                    rows.append(
+                        {
+                            "season": season,
+                            "fixture_uid": f"{season}:{home}:{away}",
+                            "kickoff_at": kickoff,
+                            "home_team": home,
+                            "away_team": away,
+                            "bookmaker": book["key"],
+                            "player_name": str(player),
+                            "price": float(o["price"]),
+                            "observed_at": obs,
+                            "source": SOURCE,
+                            "bronze_key": key,
+                        }
+                    )
+    return pd.DataFrame(rows)

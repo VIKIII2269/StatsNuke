@@ -181,6 +181,7 @@ def advise(
     team.state.gameweek = gw + 1
     if not dry_run:
         save(lake, team)
+        save_forecast(lake, season, gw, pred)
     return {"gameweek": gw, **record}
 
 
@@ -231,6 +232,28 @@ def score(lake: Lake, store: SilverStore, season: str) -> list[int]:
 
 def _num(x: Any) -> int | None:
     return None if x is None or pd.isna(x) else int(float(str(x)))
+
+
+def save_forecast(lake: Lake, season: str, gw: int, pred: pd.DataFrame) -> None:
+    """The deadline's per player-fixture forecast, kept for the props forward test."""
+    from fplh.lake.parquet import write_parquet
+    from fplh.live.props import FORECAST_KEY
+
+    cols = [c for c in FORECAST_COLUMNS if c in pred]
+    key = FORECAST_KEY.format(season=season, gw=gw)
+    write_parquet(lake, key, pred[cols].assign(gw=gw), ["fixture_uid", "player_uid"])
+
+
+FORECAST_COLUMNS = (
+    "player_uid",
+    "fixture_uid",
+    "deadline_at",
+    "horizon",
+    "expected_points",
+    "p_start",
+    "p_play",
+    "p_goal",
+)
 
 
 def season_table(team: LiveTeam) -> pd.DataFrame:
