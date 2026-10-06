@@ -1,0 +1,54 @@
+# The Stats Nuke website (web/) on GitHub Pages.
+#
+# Static files only. The page connects to Supabase with the public URL and anon key from
+# the repository variables SUPABASE_URL and SUPABASE_ANON_KEY (Settings → Secrets and
+# variables → Actions → Variables); row-level security decides what each account reads.
+# The data itself is uploaded by the Live workflow (website snapshot step), not deployed here.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write config
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          cfg = {
+              "supabaseUrl": os.environ.get("SUPABASE_URL", ""),
+              "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY", ""),
+              "repo": os.environ["REPO"],
+          }
+          open("web/config.js", "w").write(f"window.STATSNUKE_CONFIG = {json.dumps(cfg)};\n")
+          PY
+          rm -rf web/supabase
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

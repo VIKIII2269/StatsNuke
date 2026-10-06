@@ -49,6 +49,7 @@ silver_app = typer.Typer(no_args_is_help=True, help="Build validated silver tabl
 evaluate_app = typer.Typer(no_args_is_help=True, help="Walk-forward evaluation and checks.")
 live_app = typer.Typer(no_args_is_help=True, help="The live model team and paper bets.")
 models_app = typer.Typer(no_args_is_help=True, help="Fit model hyper-parameters.")
+web_app = typer.Typer(no_args_is_help=True, help="The Stats Nuke website's data.")
 app.add_typer(collect_app, name="collect")
 app.add_typer(backfill_app, name="backfill")
 app.add_typer(report_app, name="report")
@@ -56,6 +57,7 @@ app.add_typer(silver_app, name="silver")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(live_app, name="live")
 app.add_typer(models_app, name="models")
+app.add_typer(web_app, name="web")
 app.add_typer(rules_app, name="rules")
 app.add_typer(golden_app, name="golden")
 
@@ -1015,38 +1017,15 @@ def live_props_cmd(
     report: Annotated[Path | None, typer.Option(help="Append the markdown here.")] = None,
 ) -> None:
     """Anytime-scorer forward test: our P(score) against the bookmakers (A11)."""
-    import pandas as pd
-
     from fplh.features.information_set import SilverStore
-    from fplh.lake.parquet import read_parquet
-    from fplh.live.props import evaluate, match_players, props_section
+    from fplh.live.props import props_section, season_eval
 
     lake = Lake(get_settings().lake_uri)
-    store = SilverStore(lake)
-    props = store.get("snap_props")
-    if props.empty or (props["season"] == season).sum() == 0:
-        typer.echo("no anytime-scorer captures yet")
+    result = season_eval(lake, SilverStore(lake), season)
+    if isinstance(result, str):
+        typer.echo(result)
         return
-    props = props[props["season"] == season]
-    snap = store.get("snap_fpl_player")
-    snap = snap[snap["season"] == season].sort_values("observed_at")
-    snap = snap.drop_duplicates("code", keep="last")
-    names = store.get("dim_player")
-    players = snap.assign(player_uid="fpl:" + snap["code"].astype(str))[["player_uid", "team"]]
-    players = players.merge(names, on="player_uid", how="left")
-    matched = match_players(props, players)
-    keys = [k for k in lake.list(f"state/forecast/{season}/") if k.endswith(".parquet")]
-    if not keys:
-        typer.echo("no stored forecasts yet")
-        return
-    forecasts = pd.concat([read_parquet(lake, k) for k in keys], ignore_index=True)
-    if "p_play" not in forecasts or "p_goal" not in forecasts:
-        typer.echo("stored forecasts lack p_goal / p_play")
-        return
-    forecasts = forecasts[forecasts["horizon"] == 1] if "horizon" in forecasts else forecasts
-    pm = store.get("fact_player_match")
-    outcomes = pm[pm["season"] == season][["player_uid", "fixture_uid", "minutes", "goals_scored"]]
-    rows, summary = evaluate(matched, forecasts, outcomes)
+    rows, summary = result
     text = props_section(summary, rows)
     typer.echo(text or "no finished fixture with both a forecast and prices yet")
     state_key = "state/props_eval.json"
@@ -1055,3 +1034,62 @@ def live_props_cmd(
     if gws and gws != seen:
         _append(report, text)
         lake.put_bytes(state_key, json.dumps({"gws": gws}).encode(), overwrite=True)
+
+
+@live_app.command("plan-next")
+def live_plan_next_cmd(
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    force: Annotated[bool, typer.Option(help="Refresh even if the stored plan is new.")] = False,
+) -> None:
+    """The provisional plan for the next deadline, for the website (nothing is committed;
+    refreshed every 12 h until the real decision is stored)."""
+    import pandas as pd
+
+    from fplh.features.information_set import SilverStore
+    from fplh.live.team import plan_next
+
+    lake = Lake(get_settings().lake_uri)
+    rec = plan_next(lake, SilverStore(lake), season, pd.Timestamp.now(tz="UTC"), force=force)
+    if rec is None:
+        typer.echo("provisional plan is current (or the decision is already stored)")
+        return
+    typer.echo(f"GW{rec['gameweek']}: provisional plan, {rec['expected_points']:.1f} xP")
+
+
+@web_app.command("export")
+def web_export_cmd(
+    out: Annotated[Path, typer.Option(help="Where to write the snapshot JSON.")],
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    repo: Annotated[
+        str | None, typer.Option(envvar="GITHUB_REPOSITORY", help="owner/name for run health.")
+    ] = None,
+    network: Annotated[
+        bool, typer.Option(help="Refresh the FPL manager panels (needs the FPL API).")
+    ] = True,
+) -> None:
+    """Build the website's snapshot from the lake."""
+    import os
+
+    import pandas as pd
+
+    from fplh.features.information_set import SilverStore
+    from fplh.web.benchmarks import http_getter
+    from fplh.web.export import build
+
+    settings = get_settings()
+    lake = Lake(settings.lake_uri)
+    snap = build(
+        lake,
+        SilverStore(lake),
+        season,
+        pd.Timestamp.now(tz="UTC"),
+        log_path=REPO_ROOT / "docs" / "EXPERIMENTS_V2.md",
+        repo=repo,
+        token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+        fpl_get=http_getter(settings.user_agent) if network else None,
+    )
+    out.write_text(json.dumps(snap, separators=(",", ":"), allow_nan=False))
+    typer.echo(
+        f"{out}: {out.stat().st_size / 1024:.0f} KiB, {len(snap['players'])} players, "
+        f"next GW{snap['next']['gw']}"
+    )
