@@ -839,3 +839,26 @@ G7 lineup-aware rates · M11 v1 (LightGBM, A9) → v2 (multi-task network, A10) 
 VPS with Dagster assets partitioned by gameweek; §12.4 schedules; inference at D − 24 h and D − 2 h (§12.5); `delivery/telegram.py`; Healthchecks.io heartbeats; §12.8 alerts; `fplh lake sync` to move `data-bronze` history into the bucket (verified by SHA-256 against the sidecars), then retire the branch fallback.
 
 Exit: stable calibration across 10+ live gameweeks.
+
+### 7.1 Phase 6a: model v2 live on GitHub Actions (built)
+
+A stopgap before the VPS: the `Live` workflow (`.github/workflows/live.yml`) runs every 3 hours.
+
+**Setup steps in each run:**
+- Restore the historical bronze from the Actions cache. On a miss, the backfills rebuild it (about 1.5 h, once).
+- Restore the live captures and the state from the `data-bronze` branch.
+- Build silver.
+
+**Then three jobs:**
+
+| Command | What it does |
+|---|---|
+| `fplh live score` | Scores the model team's finalised gameweeks with the official rules, against FPL's average and highest manager. |
+| `fplh live advise` | Decides the next gameweek once its deadline is within 30 h. Model v2 (news-aware simulator over the fused rates at that deadline) forecasts five gameweeks; the replay's optimiser step (`optimize/step.py`) picks the week at live prices. The first decision is a free £100m squad. |
+| `fplh live bets` | Updates the consensus-value paper book from The Odds API snapshots, paper only. A soft book's price above the Betfair exchange's de-vigged fair price, at EV > 3 %, is logged when first seen. It is closed against the last pre-kickoff snapshot and settled at 1 unit. |
+
+**Outputs:**
+- Each change is posted as a comment on the "StatsNuke live 2026/27" issue (label `statsnuke-live`).
+- The state (`state/model_team.json`, `state/paper_bets.parquet`) is persisted to `data-bronze`.
+
+**Deferred:** anytime-scorer props into silver, and our P(score) against them, are not yet built.

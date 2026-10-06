@@ -68,3 +68,85 @@ def live_consensus(
     cols = [*FIXTURE, "market", "outcome", "bookmaker", "observed_at", "price", "fair", "ev"]
     result: pd.DataFrame = out[[*cols, "close_at", "fair_close", "clv"]].reset_index(drop=True)
     return result
+
+
+BETS_KEY = "state/paper_bets.parquet"
+BET_KEY = [*FIXTURE, "market", "outcome", "bookmaker"]
+
+
+def _won(outcome: str, home: float, away: float) -> bool:
+    return {
+        "home": home > away,
+        "draw": home == away,
+        "away": home < away,
+        "over": home + away > 2.5,
+        "under": home + away < 2.5,
+    }[outcome]
+
+
+def update_bets(
+    stored: pd.DataFrame, current: pd.DataFrame, results: pd.DataFrame, now: pd.Timestamp
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(new bets, the whole book). A bet is kept as first seen; later snapshots only update
+    its closing price. Once kicked off and with a result it is settled at 1 unit:
+    ``results`` is the season's fixtures: home_team, away_team, home_goals, away_goals."""
+    cur = current.copy()
+    if stored.empty:
+        new = cur
+        book = cur
+    else:
+        known = stored.set_index(BET_KEY).index
+        is_new = ~cur.set_index(BET_KEY).index.isin(known)
+        new = cur[is_new]
+        close = cur.set_index(BET_KEY)[["close_at", "fair_close"]]
+        book = stored.set_index(BET_KEY)
+        book.update(close)
+        book = pd.concat([book.reset_index(), new], ignore_index=True)
+    book = book.drop(columns=["won", "profit", "settled"], errors="ignore")
+    book["clv"] = np.where(
+        book["close_at"] > book["observed_at"], book["price"] * book["fair_close"] - 1, np.nan
+    )
+    # one league season: each ordered pair meets once, so teams identify the match (the
+    # feeds' kickoff times can differ by minutes)
+    res = results.dropna(subset=["home_goals", "away_goals"]).drop_duplicates(
+        ["home_team", "away_team"], keep="last"
+    )
+    book = book.merge(
+        res[["home_team", "away_team", "home_goals", "away_goals"]],
+        on=["home_team", "away_team"],
+        how="left",
+    )
+    book["settled"] = book["home_goals"].notna() & (book["kickoff_at"] <= now)
+    won = [
+        _won(o, h, a) if s else False
+        for o, h, a, s in zip(
+            book["outcome"], book["home_goals"], book["away_goals"], book["settled"], strict=True
+        )
+    ]
+    book["won"] = np.where(book["settled"], won, np.nan)
+    book["profit"] = np.where(book["settled"], np.where(won, book["price"] - 1, -1.0), np.nan)
+    book = book.drop(columns=["home_goals", "away_goals"])
+    return new.reset_index(drop=True), book.sort_values("observed_at").reset_index(drop=True)
+
+
+def summary(book: pd.DataFrame, n_boot: int = 2000, seed: int = 0) -> dict[str, float]:
+    """Settled bets: mean CLV with a match-day block bootstrap CI, hit rate, ROI."""
+    s = book[book["settled"].astype(bool) & book["clv"].notna()] if not book.empty else book
+    if s.empty:
+        return {"bets": 0.0}
+    clv = s["clv"].to_numpy(float)
+    day = pd.to_datetime(s["kickoff_at"]).dt.date.to_numpy()
+    blocks = [clv[day == d] for d in np.unique(day)]
+    rng = np.random.default_rng(seed)
+    boots = [
+        np.concatenate([blocks[i] for i in rng.integers(0, len(blocks), len(blocks))]).mean()
+        for _ in range(n_boot)
+    ]
+    return {
+        "bets": float(len(s)),
+        "mean_clv": float(clv.mean()),
+        "clv_low": float(np.quantile(boots, 0.025)),
+        "clv_high": float(np.quantile(boots, 0.975)),
+        "hit_rate": float(s["won"].astype(float).mean()),
+        "roi": float(s["profit"].sum() / len(s)),
+    }
