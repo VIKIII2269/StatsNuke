@@ -1,0 +1,121 @@
+# The live model team and the paper betting forward test (Phase 6a).
+#
+# Every 3 hours: restore the historical bronze (Actions cache, rebuilt by the backfills on
+# a miss) and the live captures (data-bronze branch), build silver, then
+#   1. score the model team's finalised gameweeks,
+#   2. decide the next gameweek once its deadline is within 30 h (model v2),
+#   3. update the paper book of consensus-value bets (paper only: nothing is ever placed),
+# post a comment on the "StatsNuke live" issue when anything changed, and persist the
+# state (state/model_team.json, state/paper_bets.parquet) to the data-bronze branch.
+name: Live
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Decide the next gameweek now, whatever the deadline
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # persist state to the data-bronze branch
+  issues: write # comment on the live issue
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300 # the first run rebuilds the history (about 1.5 h)
+    env:
+      FPLH_LAKE_URI: lake
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --no-dev
+
+      - name: Restore historical bronze
+        id: history
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            lake/bronze/source=vaastav
+            lake/bronze/source=football_data
+            lake/bronze/source=understat
+          key: history-bronze-v1
+
+      - name: Rebuild historical bronze (cache miss only)
+        if: steps.history.outputs.cache-hit != 'true'
+        run: |
+          uv run --no-sync fplh backfill vaastav
+          uv run --no-sync fplh backfill football-data
+          uv run --no-sync fplh backfill understat
+
+      - name: Save historical bronze
+        if: steps.history.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            lake/bronze/source=vaastav
+            lake/bronze/source=football_data
+            lake/bronze/source=understat
+          key: history-bronze-v1
+
+      - name: Restore model caches
+        id: emulator
+        uses: actions/cache/restore@v4
+        with:
+          path: lake/gold/emulator
+          key: emulator-${{ hashFiles('configs/models/**') }}
+
+      - name: Restore live captures and state
+        run: scripts/restore_branch.sh lake data-bronze bronze state
+
+      - name: Build silver
+        run: uv run --no-sync fplh silver build
+
+      - name: Score, advise, bets
+        env:
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: |
+          rm -f report.md
+          uv run --no-sync fplh live score --report report.md
+          uv run --no-sync fplh live advise $FORCE --report report.md
+          uv run --no-sync fplh live bets --report report.md
+
+      - name: Save model caches
+        if: always() && steps.emulator.outputs.cache-hit != 'true' && hashFiles('lake/gold/emulator/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: lake/gold/emulator
+          key: emulator-${{ hashFiles('configs/models/**') }}
+
+      - name: Post to the live issue
+        if: hashFiles('report.md') != ''
+        run: |
+          gh label create statsnuke-live --color 0e8a16 --force >/dev/null
+          issue=$(gh issue list --label statsnuke-live --state open --json number --jq '.[0].number')
+          if [ -z "$issue" ]; then
+            issue=$(gh issue create --label statsnuke-live --title "StatsNuke live 2026/27" \
+              --body "Model v2 plays a fresh FPL team from the next deadline, and paper bets track the consensus-value edge (paper only). Each update is a comment below." \
+              | grep -o '[0-9]*$')
+          fi
+          gh issue comment "$issue" --body-file report.md
+
+      - name: Persist state
+        if: always()
+        run: |
+          # only this workflow's own state: the collector owns the other state/ files
+          rm -rf state-only && mkdir -p state-only/state
+          for f in model_team.json paper_bets.parquet; do
+            [ -f "lake/state/$f" ] && cp "lake/state/$f" state-only/state/
+          done
+          scripts/persist_to_branch.sh state-only data-bronze

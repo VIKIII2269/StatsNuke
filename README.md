@@ -104,6 +104,11 @@ uv run fplh evaluate replay --season 2022-23 --season 2023-24 --season 2024-25  
 uv run fplh evaluate ledger --season 2022-23 --season 2023-24 --season 2024-25    # paper only
 uv run fplh evaluate ledger --season 2022-23 --season 2023-24 --season 2024-25 --strategy consensus --min-ev 0.02
 uv run fplh evaluate live-ledger --min-ev 0.03                                     # live Odds API snapshots
+
+# Phase 6a: live (scheduled by .github/workflows/live.yml)
+uv run fplh live advise --dry-run --force   # model v2's team for the next gameweek
+uv run fplh live score                      # score finalised gameweeks vs the average manager
+uv run fplh live bets                       # consensus-value paper book (paper only)
 uv run fplh evaluate v2 --season 2022-23 --season 2023-24 --season 2024-25 \
     --train-from 2019-20 --train-from 2020-21 --train-from 2021-22             # model v2 vs v1
 

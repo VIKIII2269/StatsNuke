@@ -972,3 +972,38 @@ def live_score_cmd(
     text = team_results(team)
     typer.echo(text)
     _append(report, text)
+
+
+@live_app.command("bets")
+def live_bets_cmd(
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    min_ev: Annotated[float, typer.Option(help="Paper-bet EV threshold.")] = 0.03,
+    report: Annotated[Path | None, typer.Option(help="Append the markdown here.")] = None,
+) -> None:
+    """Update the consensus-value paper book from the latest Odds API snapshots (paper
+    only): new bets, closing prices, settlement and the season summary."""
+    import pandas as pd
+
+    from fplh.delivery.live_consensus import BETS_KEY, live_consensus, summary, update_bets
+    from fplh.delivery.report import bets_section
+    from fplh.features.information_set import SilverStore
+    from fplh.lake.parquet import read_parquet, write_parquet
+
+    lake = Lake(get_settings().lake_uri)
+    store = SilverStore(lake)
+    odds = store.get("snap_odds")
+    live = odds[(odds["source"] == "odds_api") & (odds["season"] == season)] if len(odds) else odds
+    if live.empty:
+        typer.echo("no Odds API snapshots for this season yet")
+        return
+    stored = read_parquet(lake, BETS_KEY) if lake.exists(BETS_KEY) else pd.DataFrame()
+    dim = store.get("dim_fixture")
+    results = dim[dim["season"] == season]
+    now = pd.Timestamp.now(tz="UTC")
+    new, book = update_bets(stored, live_consensus(live, min_ev=min_ev), results, now)
+    settled_before = int(stored["settled"].sum()) if "settled" in stored else 0
+    write_parquet(lake, BETS_KEY, book, ["observed_at"])
+    text = bets_section(new, summary(book))
+    typer.echo(text)
+    if not new.empty or int(book["settled"].sum()) > settled_before:
+        _append(report, text)
