@@ -14,7 +14,7 @@ import pandas as pd
 from fplh.entities.teams import TeamResolver
 from fplh.lake.bronze import list_bronze, parse_key, read_bronze
 from fplh.lake.silver.common import POSITION_BY_ELEMENT_TYPE, season_label
-from fplh.lake.silver.vaastav import VaastavSeason, normalise_season
+from fplh.lake.silver.vaastav import FIXTURE_COLUMNS, VaastavSeason, normalise_season
 from fplh.lake.storage import Lake
 
 SOURCE = "fpl"
@@ -136,4 +136,49 @@ def live_season(lake: Lake, teams: TeamResolver) -> VaastavSeason | None:
     ]
     out.player_match["source"] = SOURCE
     out.fixtures["source"] = SOURCE
+    upcoming = schedule(lake, teams, boot)
+    if not upcoming.empty:
+        # unplayed fixtures from the latest fixtures capture: the live spine needs rounds
+        new = upcoming[~upcoming["fpl_fixture_id"].isin(out.fixtures["fpl_fixture_id"])]
+        out.fixtures = pd.concat([out.fixtures, new], ignore_index=True)
+        out.notes["upcoming_fixtures"] = len(new)
     return out
+
+
+def schedule(lake: Lake, teams: TeamResolver, boot: dict[str, object]) -> pd.DataFrame:
+    """Every fixture of the season with a round, from the latest ``fixtures`` capture:
+    the schedule is public in advance, so unplayed fixtures carry no goals."""
+    keys = list_bronze(lake, SOURCE, "fixtures")
+    if not keys:
+        return pd.DataFrame(columns=list(FIXTURE_COLUMNS))
+    meta, payload = read_bronze(lake, keys[-1])
+    if meta["http_status"] != 200:
+        return pd.DataFrame(columns=list(FIXTURE_COLUMNS))
+    fx = pd.DataFrame(json.loads(payload))
+    teams_list = boot["teams"]
+    assert isinstance(teams_list, list)
+    uid = {t["id"]: teams.uid(t["name"]) for t in teams_list}
+    fx = fx[fx["event"].notna() & fx["kickoff_time"].notna()]
+    kickoff = pd.to_datetime(fx["kickoff_time"], utc=True)
+    finished = (
+        fx["finished"].astype(bool)
+        if "finished" in fx
+        else pd.Series(False, index=fx.index, dtype=bool)
+    )
+    out = pd.DataFrame(
+        {
+            "season": season_label(_season_of(boot)),
+            "fpl_fixture_id": fx["id"].astype("int64"),
+            "round": fx["event"].astype("int64"),
+            "kickoff_at": kickoff,
+            "home_team": fx["team_h"].map(uid),
+            "away_team": fx["team_a"].map(uid),
+            "home_goals": pd.to_numeric(fx["team_h_score"].where(finished)).astype("Int64"),
+            "away_goals": pd.to_numeric(fx["team_a_score"].where(finished)).astype("Int64"),
+            "event_at": kickoff,
+            "observed_at": kickoff + pd.Timedelta(hours=33),
+            "source": SOURCE,
+        }
+    )
+    result: pd.DataFrame = out[list(FIXTURE_COLUMNS)].reset_index(drop=True)
+    return result

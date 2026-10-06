@@ -47,12 +47,14 @@ backfill_app = typer.Typer(no_args_is_help=True, help="Download historical files
 report_app = typer.Typer(no_args_is_help=True, help="Data availability reports.")
 silver_app = typer.Typer(no_args_is_help=True, help="Build validated silver tables.")
 evaluate_app = typer.Typer(no_args_is_help=True, help="Walk-forward evaluation and checks.")
+live_app = typer.Typer(no_args_is_help=True, help="The live model team and paper bets.")
 models_app = typer.Typer(no_args_is_help=True, help="Fit model hyper-parameters.")
 app.add_typer(collect_app, name="collect")
 app.add_typer(backfill_app, name="backfill")
 app.add_typer(report_app, name="report")
 app.add_typer(silver_app, name="silver")
 app.add_typer(evaluate_app, name="evaluate")
+app.add_typer(live_app, name="live")
 app.add_typer(models_app, name="models")
 app.add_typer(rules_app, name="rules")
 app.add_typer(golden_app, name="golden")
@@ -909,3 +911,64 @@ def version() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     app()
+
+
+LIVE_SEASON = "2026-27"
+
+
+def _player_names(store: object) -> dict[str, str]:
+    names = store.get("dim_player")  # type: ignore[attr-defined]
+    return dict(zip(names["player_uid"], names["web_name"], strict=True))
+
+
+def _append(report: Path | None, text: str) -> None:
+    if report is not None and text:
+        with report.open("a") as f:
+            f.write(text.rstrip() + "\n\n")
+
+
+@live_app.command("advise")
+def live_advise_cmd(
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    force: Annotated[bool, typer.Option(help="Decide now, whatever the deadline.")] = False,
+    dry_run: Annotated[bool, typer.Option(help="Do not store the decision.")] = False,
+    report: Annotated[Path | None, typer.Option(help="Append the markdown here.")] = None,
+) -> None:
+    """Decide the next gameweek for the model team (once per gameweek, within 30 h)."""
+    import pandas as pd
+
+    from fplh.delivery.report import team_week
+    from fplh.features.information_set import SilverStore
+    from fplh.live.team import advise
+
+    lake = Lake(get_settings().lake_uri)
+    store = SilverStore(lake)
+    rec = advise(lake, store, season, pd.Timestamp.now(tz="UTC"), force=force, dry_run=dry_run)
+    if rec is None:
+        typer.echo("nothing to advise (deadline not within 30 h, or already decided)")
+        return
+    text = team_week(int(rec["gameweek"]), rec, _player_names(store))
+    typer.echo(text)
+    _append(report, text)
+
+
+@live_app.command("score")
+def live_score_cmd(
+    season: Annotated[str, typer.Option(help="The live season.")] = LIVE_SEASON,
+    report: Annotated[Path | None, typer.Option(help="Append the markdown here.")] = None,
+) -> None:
+    """Score the model team's finalised gameweeks against FPL's average manager."""
+    from fplh.delivery.report import team_results
+    from fplh.features.information_set import SilverStore
+    from fplh.live.team import load, score
+
+    lake = Lake(get_settings().lake_uri)
+    done = score(lake, SilverStore(lake), season)
+    if not done:
+        typer.echo("no newly finalised gameweek")
+        return
+    team = load(lake, season)
+    assert team is not None
+    text = team_results(team)
+    typer.echo(text)
+    _append(report, text)
