@@ -17,6 +17,14 @@ gameweek deadline (the Phase 2 fused grid, walk-forward) and the best pre-match 
 Mean CLV of the bets, with a gameweek-block bootstrap CI, is the evidence of forecasting
 skill: a model with no edge has mean CLV ≈ 0. Paper ROI is reported but is not a criterion
 (it is dominated by variance at any realistic sample size).
+
+**Consensus value** (``consensus_ledger``, model v2): the same ledger with p̂ taken from
+the sharp book instead of our model. Pinnacle's pre-closing prices, de-vigged with the
+power method, are the fair probability; a bet is a named soft bookmaker's pre-closing
+price above it (the price must exist at the same snapshot). Optionally p̂ blends in the
+model (``model_weight``). Soft books lag the sharp line, so their stale prices beat the
+close; on 2016/17–2024/25 research this held in every season. Real accounts that do this
+get limited quickly, which the paper ledger cannot show.
 """
 
 from __future__ import annotations
@@ -31,6 +39,9 @@ from fplh.lake.storage import Lake
 from fplh.models.market import devig
 
 OUTCOMES = {"1x2": ("home", "draw", "away"), "total": ("over", "under")}
+SHARP = ("pinnacle",)
+# named soft bookmakers (one executable price each; the market maximum is not a book)
+SOFT = ("bet365", "wh", "vc", "bw", "iw", "lb", "1xb", "bv", "bmgm", "cl", "bs", "gb", "sb", "sj")
 PROB = {"home": "p_home", "draw": "p_draw", "away": "p_away", "over": "p_over25"}
 
 
@@ -58,7 +69,10 @@ def _pivot(odds: pd.DataFrame, closing: bool, books: tuple[str, ...]) -> pd.Data
 
 
 def fair_closing(odds: pd.DataFrame, method: str) -> pd.DataFrame:
-    close = _pivot(odds, True, ("pinnacle", "market_avg"))
+    return _fair(_pivot(odds, True, ("pinnacle", "market_avg")), method)
+
+
+def _fair(close: pd.DataFrame, method: str) -> pd.DataFrame:
     out = pd.DataFrame(index=close.index)
     for outs in OUTCOMES.values():
         cols = [c for c in outs if c in close]
@@ -116,6 +130,70 @@ def ledger(
     return pd.DataFrame(rows)
 
 
+def _long(table: pd.DataFrame, name: str) -> pd.DataFrame:
+    out: pd.DataFrame = (
+        table.rename_axis("fixture_uid")
+        .reset_index()
+        .melt(id_vars="fixture_uid", var_name="col", value_name=name)
+        .dropna(subset=[name])
+    )
+    return out
+
+
+def consensus_ledger(
+    odds: pd.DataFrame,
+    rounds: pd.Series,
+    *,
+    method: str = "power",
+    books: tuple[str, ...] = SOFT,
+    model: pd.DataFrame | None = None,
+    model_weight: float = 0.0,
+    close_method: str | None = None,
+) -> pd.DataFrame:
+    """Rows as ``ledger``: each soft book's pre-closing price against the sharp fair price.
+
+    ``model`` (fixture_uid, p_home, p_draw, p_away, p_over25) is blended in with
+    ``model_weight`` where it has the fixture."""
+    o = odds[(odds["market"] == "1x2") | ((odds["market"] == "total") & (odds["line"] == 2.5))]
+    sharp = _fair(_pivot(o, False, SHARP), method)
+    close = _fair(_pivot(o, True, ("pinnacle", "market_avg")), close_method or method)
+    if model is not None and model_weight > 0:
+        m = model.drop_duplicates("fixture_uid", keep="last").set_index("fixture_uid")
+        for c in ("home", "draw", "away", "over"):
+            if f"fair_{c}" not in sharp:
+                continue
+            mine = m[PROB[c]].reindex(sharp.index)
+            sharp[f"fair_{c}"] = np.where(
+                mine.notna(),
+                (1 - model_weight) * sharp[f"fair_{c}"] + model_weight * mine,
+                sharp[f"fair_{c}"],
+            )
+        if "fair_over" in sharp:
+            sharp["fair_under"] = 1 - sharp["fair_over"]
+    soft = o[(~o["is_closing"]) & o["bookmaker"].isin(books)]
+    soft = soft[soft["fixture_uid"].isin(sharp.index)]
+    p = soft["outcome"].map(lambda c: f"fair_{c}")
+    fair = _long(sharp, "p")
+    rows = soft.assign(col=p.to_numpy()).merge(fair, on=["fixture_uid", "col"], how="inner")
+    cl = _long(close, "p_close")
+    rows = rows.merge(cl, on=["fixture_uid", "col"], how="left")
+    rows = rows[rows["price"] > 1]
+    out = pd.DataFrame(
+        {
+            "fixture_uid": rows["fixture_uid"].to_numpy(),
+            "block": rows["fixture_uid"].map(rounds).fillna(rows["fixture_uid"]).to_numpy(),
+            "market": rows["market"].to_numpy(),
+            "outcome": rows["outcome"].to_numpy(),
+            "bookmaker": rows["bookmaker"].to_numpy(),
+            "p_model": rows["p"].to_numpy(float),
+            "price": rows["price"].to_numpy(float),
+            "ev": (rows["p"] * rows["price"] - 1).to_numpy(float),
+            "clv": (rows["price"] * rows["p_close"] - 1).to_numpy(float),
+        }
+    )
+    return out
+
+
 def paper_bets(
     book: pd.DataFrame, results: pd.DataFrame, config: LedgerConfig | None = None
 ) -> pd.DataFrame:
@@ -171,9 +249,16 @@ def summarise(bets: pd.DataFrame, n_boot: int = 2000) -> dict[str, float]:
 
 
 def run_ledger(
-    lake: Lake, seasons: list[str], config: LedgerConfig | None = None
+    lake: Lake,
+    seasons: list[str],
+    config: LedgerConfig | None = None,
+    *,
+    strategy: str = "model",
+    model_weight: float = 0.25,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
-    """The ledger over the cached walk-forward fused forecasts of ``seasons``."""
+    """The ledger over ``seasons``: ``model`` bets the cached walk-forward fused forecasts;
+    ``consensus`` the sharp book's fair price against soft books; ``hybrid`` the
+    consensus fair price blended with the model (``model_weight``)."""
     from fplh.evaluate.phase3 import FusedRates
     from fplh.evaluate.walk_forward import cached_walk_forward
     from fplh.features.information_set import SilverStore
@@ -184,11 +269,27 @@ def run_ledger(
     store = SilverStore(lake)
     dim = store.get("dim_fixture")
     ds = [d for s in seasons for d in historical_deadlines(dim, s)["deadline_at"]]
-    probs = cached_walk_forward(
-        store, FusedRates(store, min(ds)), ds, lake=lake, unit="fixture"
-    ).predictions
     rounds = dim.set_index("fixture_uid")
     label = rounds["season"].astype(str) + ":" + rounds["round"].astype("Int64").astype(str)
-    book = ledger(probs, store.get("snap_odds"), label, cfg)
+    odds = store.get("snap_odds")
+    odds = odds[odds["fixture_uid"].isin(dim[dim["season"].isin(seasons)]["fixture_uid"])]
+    probs = None
+    if strategy != "consensus":
+        probs = cached_walk_forward(
+            store, FusedRates(store, min(ds)), ds, lake=lake, unit="fixture"
+        ).predictions
+    if strategy == "model":
+        assert probs is not None
+        book = ledger(probs, odds, label, cfg)
+    else:
+        weight = model_weight if strategy == "hybrid" else 0.0
+        book = consensus_ledger(
+            odds,
+            label,
+            method="power",
+            model=probs,
+            model_weight=weight,
+            close_method=cfg.devig_method,
+        )
     bets = paper_bets(book, dim[["fixture_uid", "home_goals", "away_goals"]], cfg)
     return book, bets, summarise(bets)

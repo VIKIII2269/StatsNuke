@@ -64,6 +64,7 @@ def snapshots(lake: Lake, teams: TeamResolver) -> tuple[pd.DataFrame, pd.DataFra
                     "position": pos,
                     "team": team_uid[e["team"]],
                     **{f: e.get(f) for f in SNAPSHOT_FIELDS},
+                    "total_players": boot.get("total_players"),
                     "observed_at": obs,
                     "source": SOURCE,
                     "bronze_key": key,

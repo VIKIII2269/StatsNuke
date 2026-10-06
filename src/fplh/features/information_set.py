@@ -33,7 +33,10 @@ TIME_INDEXED = (
     "snap_odds",
     "snap_fpl_player",
     "fpl_event",
+    "fpl_round_transfers",
 )
+# Views derived on read from other silver tables (no file of their own).
+DERIVED = ("fpl_round_transfers",)
 # Dimension columns that are knowable in advance (schedule and identity only).
 DIMENSION_COLUMNS: dict[str, tuple[str, ...]] = {
     "dim_fixture": (
@@ -63,9 +66,18 @@ class SilverStore:
 
     def get(self, name: str) -> pd.DataFrame:
         if name not in self.frames:
-            if self.lake is None:
+            if name in DERIVED:
+                from fplh.features.transfers import fpl_round_transfers
+
+                self.frames[name] = fpl_round_transfers(
+                    self.get("fact_player_match"),
+                    self.get("dim_fixture"),
+                    self.get("snap_fpl_player"),
+                )
+            elif self.lake is None:
                 return pd.DataFrame()
-            self.frames[name] = read_table(self.lake, f"silver/{name}")
+            else:
+                self.frames[name] = read_table(self.lake, f"silver/{name}")
         return self.frames[name]
 
     @classmethod

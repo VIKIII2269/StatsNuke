@@ -324,7 +324,24 @@ def strategy_forecasts(lake: Lake, seasons: list[str]) -> dict[str, tuple[pd.Dat
         "a0 (repeat)": (a0, "repeat"),
         "last5 (repeat)": (run(lake, store, NaiveLast5(), ds), "repeat"),
     }
+    preds[V2_STRATEGY] = (v2_forecasts(lake, store, seasons, ds), "native")
     return {k: (v[KEEP].dropna(subset=["expected_points"]), m) for k, (v, m) in preds.items()}
+
+
+V2_STRATEGY = "v2 (news, horizon 5)"
+
+
+def v2_forecasts(
+    lake: Lake, store: SilverStore, seasons: list[str], deadlines: list[pd.Timestamp]
+) -> pd.DataFrame:
+    """Model v2 at horizon 5: the simulator with news-aware minutes (``minutes="news"``).
+    The stacking layer (``models.stack``) is not used: on 2021/22 it added only −0.010
+    MSE [−0.020, +0.000] over this simulator, so it did not pass the gate."""
+    from fplh.evaluate.phase3 import run, simulator
+
+    sim = simulator(lake, store, deadlines, 1000, 5, minutes="news")
+    out: pd.DataFrame = run(lake, store, sim, deadlines, 5)
+    return out
 
 
 def _job(args: tuple[str, str, str, pd.DataFrame, Mode, dict[str, float]]) -> pd.DataFrame:
@@ -345,6 +362,8 @@ class ReplayReport:
     sensitivity: pd.DataFrame
     passed: bool
     logs: pd.DataFrame
+    v2_gate: pd.DataFrame = field(default_factory=pd.DataFrame)
+    v2_passed: bool = False
 
 
 def evaluate_replay(
@@ -376,20 +395,14 @@ def evaluate_replay(
     totals = season_totals(main)
     total_of = {str(k): float(v) for k, v in totals["total"].items()}
     strongest = max(BASELINES, key=lambda b: total_of[b])
-    gate_rows = []
-    for b in BASELINES:
-        c = compare_strategies(main, GATE_STRATEGY, b)
-        per_season = {
-            s: float(
-                main[(main["strategy"] == GATE_STRATEGY) & (main["season"] == s)]["points"].sum()
-                - main[(main["strategy"] == b) & (main["season"] == s)]["points"].sum()
-            )
-            for s in seasons
-        }
-        gate_rows.append({"baseline": b, **c, **{f"diff {s}": v for s, v in per_season.items()}})
-    gate = pd.DataFrame(gate_rows)
+    gate = _gate(main, GATE_STRATEGY, BASELINES, seasons)
     strongest_row = gate[gate["baseline"] == strongest].iloc[0]
     passed = bool(strongest_row["ci_low"] > 0)
+    v2_gate = (
+        _gate(main, V2_STRATEGY, (*BASELINES, GATE_STRATEGY), seasons)
+        if V2_STRATEGY in total_of
+        else pd.DataFrame()
+    )
     sens = (
         season_totals(logs[logs["strategy"].str.startswith(GATE_STRATEGY)])
         if sensitivity
@@ -403,7 +416,28 @@ def evaluate_replay(
         sens,
         passed,
         logs,
+        v2_gate,
+        bool(v2_gate[v2_gate["baseline"] == strongest]["ci_low"].iloc[0] > 0)
+        if not v2_gate.empty
+        else False,
     )
+
+
+def _gate(
+    main: pd.DataFrame, strategy: str, baselines: tuple[str, ...], seasons: list[str]
+) -> pd.DataFrame:
+    rows = []
+    for b in baselines:
+        c = compare_strategies(main, strategy, b)
+        per_season = {
+            s: float(
+                main[(main["strategy"] == strategy) & (main["season"] == s)]["points"].sum()
+                - main[(main["strategy"] == b) & (main["season"] == s)]["points"].sum()
+            )
+            for s in seasons
+        }
+        rows.append({"baseline": b, **c, **{f"diff {s}": v for s, v in per_season.items()}})
+    return pd.DataFrame(rows)
 
 
 def versus_average(log: pd.DataFrame, events: pd.DataFrame, season: str) -> pd.DataFrame:

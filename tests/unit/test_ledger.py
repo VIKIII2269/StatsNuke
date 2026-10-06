@@ -9,7 +9,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fplh.delivery.ledger import LedgerConfig, fair_closing, ledger, paper_bets, summarise
+from fplh.delivery.ledger import (
+    LedgerConfig,
+    consensus_ledger,
+    fair_closing,
+    ledger,
+    paper_bets,
+    summarise,
+)
+from fplh.models.market import devig
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 T0 = pd.Timestamp("2024-08-16 18:00", tz="UTC")
@@ -113,3 +121,63 @@ def test_no_code_path_can_place_a_bet() -> None:
         if write.search(line)
     ]
     assert hits == [], "write call or bet placement found:\n" + "\n".join(hits)
+
+
+def test_consensus_bets_soft_prices_above_the_sharp_fair_price() -> None:
+    t = T0 - pd.Timedelta(days=1)
+    rows = [
+        *(
+            odds_row("s:a:b", "pinnacle", False, "1x2", o, p, t)
+            for o, p in (("home", 2.0), ("draw", 3.5), ("away", 4.0))
+        ),
+        *(
+            odds_row("s:a:b", "pinnacle", True, "1x2", o, p, T0)
+            for o, p in (("home", 1.9), ("draw", 3.6), ("away", 4.4))
+        ),
+        *(
+            odds_row("s:a:b", "bet365", False, "1x2", o, p, t)
+            for o, p in (("home", 2.2), ("draw", 3.2), ("away", 3.8))
+        ),
+        # the market maximum is not a book: never bet
+        *(
+            odds_row("s:a:b", "market_max", False, "1x2", o, p, t)
+            for o, p in (("home", 9.0), ("draw", 9.0), ("away", 9.0))
+        ),
+    ]
+    book = consensus_ledger(pd.DataFrame(rows), pd.Series({"s:a:b": "s:1"}), method="power")
+    assert set(book["bookmaker"]) == {"bet365"}
+    fair = devig(np.array([2.0, 3.5, 4.0]), "power")
+    close = devig(np.array([1.9, 3.6, 4.4]), "power")
+    home = book[book["outcome"] == "home"].iloc[0]
+    assert np.isclose(home["ev"], 2.2 * fair[0] - 1)
+    assert np.isclose(home["clv"], 2.2 * close[0] - 1)
+    assert home["ev"] > 0 > book[book["outcome"] == "draw"]["ev"].iloc[0]
+
+
+def test_hybrid_blends_the_model_into_the_fair_price() -> None:
+    t = T0 - pd.Timedelta(days=1)
+    rows = [
+        *(
+            odds_row("s:a:b", "pinnacle", False, "1x2", o, p, t)
+            for o, p in (("home", 2.0), ("draw", 3.5), ("away", 4.0))
+        ),
+        *(
+            odds_row("s:a:b", "bet365", False, "1x2", o, p, t)
+            for o, p in (("home", 2.2), ("draw", 3.2), ("away", 3.8))
+        ),
+    ]
+    model = pd.DataFrame(
+        {
+            "fixture_uid": ["s:a:b"],
+            "p_home": [0.6],
+            "p_draw": [0.2],
+            "p_away": [0.2],
+            "p_over25": [0.5],
+        }
+    )
+    labels = pd.Series({"s:a:b": "s:1"})
+    a = consensus_ledger(pd.DataFrame(rows), labels)
+    b = consensus_ledger(pd.DataFrame(rows), labels, model=model, model_weight=0.5)
+    pa = a[a["outcome"] == "home"]["p_model"].iloc[0]
+    pb = b[b["outcome"] == "home"]["p_model"].iloc[0]
+    assert np.isclose(pb, 0.5 * pa + 0.5 * 0.6)
