@@ -141,3 +141,13 @@ D1: 2021/22 replay with the v1 simulator (repeat mode), one setting changed at a
 | Betfair historical data, Basic plan | Free with a Betfair account | Minute-level exchange prices since 2016, incl. scorer markets | ❌ not accessible to the owner |
 | API-Football free key (100 req/day) | Key set (`FPLH_API_FOOTBALL_KEY`) | Injuries, lineups | ❌ injuries post-match (leak); current season paid; account suspended after a burst |
 | vaastav `xP` | Yes | — | ❌ leaks (F7) |
+
+## Phase 5
+
+| # | Item | Test | Result | Status |
+|---|---|---|---|---|
+| P5.1 | **FPL availability flags and penalty order in the live forecast** (`news_overlay`, `penalty_order`) | Live only (captures start in 2026/27); unit-tested rules | GW6 deadline: 180 of 667 players at 0 % and 41 partial; all 20 teams list a penalty order | ✅ live (PR #17) |
+| P5.2 | Rank-aware objective, E·(1 − κ·EO), overall rank | Measurability | With one replay per strategy, expected overall rank is a monotone transform of total points, and the field's score is the same for every strategy, so a rank gain is not identifiable from history. Differentials pay only when chasing a tail target (top 10k, a mini-league lead). | ➖ not built: revisit for a mini-league or top-k goal |
+| P5.3 | M12 price changes | 161k player-rounds, 2018/19–2024/25 | Changes are rare (8.6 % of rounds). Net transfers predict direction (top decile +0.15, bottom decile −0.28 in £0.1m next round), but the weekly decision value after the half-profit sell rule is a few £0.1m a season. | ➖ not built: value below what a replay CI can detect |
+| P5.4 | SAA captain and bench (A12b) | Design check | The captain is already the argmax of expected points. Scenarios change it only through auto-sub interactions and teammate correlation, a second-order effect on expected points. | 🔜 low priority |
+| P5.5 | Anytime-scorer props forward test (A11) | Weekly log loss: our P(score) vs the de-vigged market vs a blend | Props calls fire in the closing windows; the first captures arrive with GW6 | ⏳ building |

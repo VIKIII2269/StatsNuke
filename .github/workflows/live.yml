@@ -5,6 +5,7 @@
 #   1. score the model team's finalised gameweeks,
 #   2. decide the next gameweek once its deadline is within 30 h (model v2),
 #   3. update the paper book of consensus-value bets (paper only: nothing is ever placed),
+#   4. score our P(score) against the anytime-scorer prices (forward test A11),
 # post a comment on the "StatsNuke live" issue when anything changed, and persist the
 # state (state/model_team.json, state/paper_bets.parquet) to the data-bronze branch.
 name: Live
@@ -90,6 +91,7 @@ jobs:
           uv run --no-sync fplh live score --report report.md
           uv run --no-sync fplh live advise $FORCE --report report.md
           uv run --no-sync fplh live bets --report report.md
+          uv run --no-sync fplh live props --report report.md
 
       - name: Save model caches
         if: always() && steps.emulator.outputs.cache-hit != 'true' && hashFiles('lake/gold/emulator/**') != ''
@@ -115,7 +117,8 @@ jobs:
         run: |
           # only this workflow's own state: the collector owns the other state/ files
           rm -rf state-only && mkdir -p state-only/state
-          for f in model_team.json paper_bets.parquet; do
+          for f in model_team.json paper_bets.parquet props_eval.json; do
             [ -f "lake/state/$f" ] && cp "lake/state/$f" state-only/state/
           done
+          [ -d lake/state/forecast ] && cp -r lake/state/forecast state-only/state/
           scripts/persist_to_branch.sh state-only data-bronze

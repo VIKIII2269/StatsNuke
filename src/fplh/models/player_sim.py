@@ -171,6 +171,7 @@ def summarise_side(side: SideResult, uids: np.ndarray, fixture_uid: str) -> pd.D
         "p_play": (ev["minutes"] > 0).mean(axis=0),
         "expected_minutes": ev["minutes"].mean(axis=0),
         "e_goals": ev["goals_scored"].mean(axis=0),
+        "p_goal": (ev["goals_scored"] >= 1).mean(axis=0),
         "e_assists": ev["assists"].mean(axis=0),
         "e_saves": ev["saves"].mean(axis=0),
         "e_bonus": ev["bonus"].mean(axis=0),

@@ -34,6 +34,7 @@ TIME_INDEXED = (
     "snap_fpl_player",
     "fpl_event",
     "fpl_round_transfers",
+    "snap_props",
 )
 # Views derived on read from other silver tables (no file of their own).
 DERIVED = ("fpl_round_transfers",)
