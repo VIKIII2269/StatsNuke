@@ -48,15 +48,17 @@ class LiveTeam:
     @classmethod
     def from_json(cls, raw: bytes) -> LiveTeam:
         doc = json.loads(raw)
-        s = doc["state"]
-        state = State(
-            int(s["gameweek"]),
-            {str(k): int(v) for k, v in s["squad"].items()},
-            int(s["bank"]),
-            int(s["free_transfers"]),
-            {str(k): [int(g) for g in v] for k, v in s["chips_used"].items()},
-        )
-        return cls(str(doc["season"]), state, dict(doc["weeks"]))
+        return cls(str(doc["season"]), state_from(doc["state"]), dict(doc["weeks"]))
+
+
+def state_from(s: dict[str, Any]) -> State:
+    return State(
+        int(s["gameweek"]),
+        {str(k): int(v) for k, v in s["squad"].items()},
+        int(s["bank"]),
+        int(s["free_transfers"]),
+        {str(k): [int(g) for g in v] for k, v in s["chips_used"].items()},
+    )
 
 
 def load(lake: Lake, season: str) -> LiveTeam | None:
@@ -176,6 +178,10 @@ def _new_or_loaded(lake: Lake, season: str, gw: int) -> LiveTeam:
     return load(lake, season) or LiveTeam(season, State(gw, {}, 1000, 15, {}))
 
 
+REDECIDE_AFTER = pd.Timedelta(hours=2)
+PLAN_KEYS = ("xi", "bench", "captain", "vice", "chip", "buys", "sells")
+
+
 def advise(
     lake: Lake,
     store: SilverStore,
@@ -185,15 +191,32 @@ def advise(
     force: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any] | None:
-    """Decide the next gameweek if its deadline is within ``ADVISE_WITHIN`` (or
-    ``force``) and it has not been decided yet; returns that week's record."""
+    """Decide the next gameweek once its deadline is within ``ADVISE_WITHIN`` (or now,
+    with ``force``), then re-decide it on every later run before the deadline, so the
+    decision that stands is the one made with the latest team news and prices.
+
+    Each record keeps the state it was decided from (``state_before``), so a re-decision
+    first undoes the previous one. A decision made before the window (forced) is redone
+    once the window opens. Returns the week's record when the plan is new or changed,
+    else None."""
     gw, deadline = next_deadline(store, season, now)
     team = _new_or_loaded(lake, season, gw)
-    if str(gw) in team.weeks and team.weeks[str(gw)].get("advised"):
+    week = team.weeks.get(str(gw), {})
+    in_window = deadline - now <= ADVISE_WITHIN
+    if week.get("advised"):
+        before = week.get("state_before")
+        if before is None or not in_window:
+            return None  # decided by an older version, or forced early: wait for the window
+        if now - pd.Timestamp(str(week["advised"])) < REDECIDE_AFTER:
+            return None
+        team.state = state_from(before)
+    elif not force and not in_window:
         return None
-    if not force and deadline - now > ADVISE_WITHIN:
-        return None
+    state_before = asdict(team.state)
     record, decision, pred = _plan(lake, store, team, gw, deadline, now)
+    record["state_before"] = state_before
+    record["revision"] = int(week.get("revision", 1)) + 1 if week else 1
+    changed = not week or any(record[k] != week.get(k) for k in PLAN_KEYS)
     team.weeks[str(gw)] = record
     commit(team.state, decision, gw)
     team.state.gameweek = gw + 1
@@ -201,7 +224,7 @@ def advise(
         save(lake, team)
         save_forecast(lake, season, gw, pred)
         save_replica(lake, store, season, gw, deadline)
-    return {"gameweek": gw, **record}
+    return {"gameweek": gw, **record} if changed else None
 
 
 NEXT_KEY = "state/next/{season}.json"

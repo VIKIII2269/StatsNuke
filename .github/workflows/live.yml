@@ -1,9 +1,10 @@
 # The live model team and the paper betting forward test (Phase 6a).
 #
-# Every 3 hours: restore the historical bronze (Actions cache, rebuilt by the backfills on
+# Every 2 hours: restore the historical bronze (Actions cache, rebuilt by the backfills on
 # a miss) and the live captures (data-bronze branch), build silver, then
 #   1. score the model team's finalised gameweeks,
-#   2. decide the next gameweek once its deadline is within 30 h (model v2),
+#   2. decide the next gameweek once its deadline is within 30 h (model v2), and redo the
+#      decision on each later run so the latest team news counts,
 #   3. update the paper book of consensus-value bets (paper only: nothing is ever placed),
 #   4. score our P(score) against the anytime-scorer prices (forward test A11),
 # post a comment on the "StatsNuke live" issue when anything changed, refresh the
@@ -13,7 +14,7 @@ name: Live
 
 on:
   schedule:
-    - cron: "23 */3 * * *"
+    - cron: "23 */2 * * *" # GitHub drops some scheduled runs; the GW decision is redone each run in the last 30 h
   workflow_dispatch:
     inputs:
       force:
