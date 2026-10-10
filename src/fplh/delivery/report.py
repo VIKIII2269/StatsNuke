@@ -23,7 +23,12 @@ def team_week(gw: int, week: Mapping[str, Any], names: Mapping[str, str]) -> str
         return f"{_name(names, p)}{tag} {exp.get(p, 0):.1f}"
 
     lines = [
-        f"### Model team, GW{gw} (deadline {str(week['deadline'])[:16].replace('T', ' ')} UTC)",
+        f"### Model team, GW{gw} (deadline {str(week['deadline'])[:16].replace('T', ' ')} UTC)"
+        + (
+            f", revised with new team news (revision {week['revision']})"
+            if week.get("revision", 1) > 1
+            else ""
+        ),
         f"- **Expected points:** {week['expected_points']:.1f}"
         + (f" · **chip:** {week['chip'].replace('_', ' ')}" if week.get("chip") else ""),
         "- **XI:** " + ", ".join(who(p) for p in week["xi"]),

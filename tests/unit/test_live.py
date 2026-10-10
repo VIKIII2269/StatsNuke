@@ -264,3 +264,33 @@ def test_site_snapshot_builds_from_the_live_state(
     assert snap["lab"][0]["tables"][0]["rows"] == [["F1", "**x**", "✅"]]
     names = {c["name"] for c in snap["data"]["checks"]}
     assert "Fixture schedule" in names and "Forecast for the next deadline" in names
+
+
+def test_early_decision_is_redone_with_the_latest_news(
+    setup: tuple[Lake, SilverStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lake, store = setup
+    monkeypatch.setattr(live, "ADVISE_WITHIN", pd.Timedelta(hours=12))
+    early = live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=22), force=True)
+    assert early is not None and early["revision"] == 1
+    assert live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=16)) is None  # early
+    cap = early["captain"]
+
+    def news(lake_: Lake, store_: SilverStore, d: pd.Timestamp) -> pd.DataFrame:
+        f = fake_forecast(lake_, store_, d)  # the captain is ruled out
+        return f.assign(expected_points=f["expected_points"].where(f["player_uid"] != cap, 0.0))
+
+    monkeypatch.setattr(live, "forecast", news)
+    rec = live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=10))
+    assert rec is not None and rec["revision"] == 2 and rec["captain"] != cap
+    team = live.load(lake, SEASON)
+    assert team is not None and team.state.gameweek == 7
+    assert set(team.state.squad) == set(rec["squad"])
+    assert team.weeks["6"]["state_before"]["squad"] == {}  # redone from the £100m start
+    assert team.weeks["6"]["state_before"]["bank"] == 1000
+    # same news: redone quietly; within two hours of the last decision: left alone
+    assert live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=7)) is None
+    assert live.advise(lake, store, SEASON, DEADLINE - pd.Timedelta(hours=6)) is None
+    team = live.load(lake, SEASON)
+    assert team is not None and team.weeks["6"]["revision"] == 3
+    assert team.weeks["6"]["captain"] == rec["captain"]

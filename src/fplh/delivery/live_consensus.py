@@ -11,6 +11,15 @@ anchor's fair price at the same snapshot. A paper bet is the first snapshot at w
 outcome clears ``min_ev`` (one per fixture, market, outcome and book). CLV is measured
 against the anchor's fair price at the last snapshot before kickoff. Nothing here can
 place a bet: the tracker only reads stored snapshots.
+
+Data guards (a week before kickoff the exchange market is thin and its quotes can be
+stale or one-sided: Forest 1.30, draw 1.15, Arsenal 1.50 once implied 230 %):
+
+* the anchor's quotes are used only when their implied probabilities sum to
+  ``ANCHOR_BOOK`` (a two-sided exchange market sits close to 100 %);
+* a bet needs the anchor's fair probability within ``MAX_GAP`` of the soft books' own
+  consensus (their median de-vigged probability): a larger gap is a data error, not an edge;
+* an edge above ``MAX_EV`` is treated as a data error too.
 """
 
 from __future__ import annotations
@@ -24,6 +33,9 @@ ANCHOR = "betfair_ex_uk"
 EXCHANGES = ("betfair_ex_uk", "betfair_ex_eu", "smarkets", "matchbook")
 OUTCOMES = {"1x2": ("home", "draw", "away"), "total": ("over", "under")}
 FIXTURE = ["home_team", "away_team", "kickoff_at"]
+ANCHOR_BOOK = (0.97, 1.06)  # sum of the anchor's implied probabilities
+MAX_GAP = 0.06  # |anchor fair − soft-book consensus|, probability points
+MAX_EV = 0.15
 
 
 def anchor_fair(odds: pd.DataFrame, anchor: str = ANCHOR, method: str = "power") -> pd.DataFrame:
@@ -36,10 +48,26 @@ def anchor_fair(odds: pd.DataFrame, anchor: str = ANCHOR, method: str = "power")
         prices = g.drop_duplicates("outcome").set_index("outcome")["price"].reindex(outs)
         if prices.isna().any() or (prices <= 1).any():
             continue
+        book = float((1 / prices).sum())
+        if not ANCHOR_BOOK[0] <= book <= ANCHOR_BOOK[1]:
+            continue  # stale or one-sided exchange quotes
         fair = devig(prices.to_numpy(float), method)
         for o, p in zip(outs, fair, strict=True):
             rows.append((*key, o, float(p)))
     return pd.DataFrame(rows, columns=[*FIXTURE, "observed_at", "market", "outcome", "fair"])
+
+
+def soft_consensus(soft: pd.DataFrame) -> pd.DataFrame:
+    """Per (fixture, snapshot, market, outcome): the median over soft books of each book's
+    proportionally de-vigged probability."""
+    keys = [*FIXTURE, "observed_at", "market"]
+    s = soft.drop_duplicates([*keys, "bookmaker", "outcome"]).copy()
+    s["implied"] = 1 / s["price"]
+    s["implied"] = s["implied"] / s.groupby([*keys, "bookmaker"])["implied"].transform("sum")
+    out: pd.DataFrame = (
+        s.groupby([*keys, "outcome"])["implied"].median().rename("consensus").reset_index()
+    )
+    return out
 
 
 def live_consensus(
@@ -55,8 +83,10 @@ def live_consensus(
     soft = soft[(soft["market"] == "1x2") | (soft["line"] == 2.5)]
     keys = [*FIXTURE, "observed_at", "market", "outcome"]
     cand = soft.merge(fair, on=keys, how="inner")
+    cand = cand.merge(soft_consensus(soft), on=keys, how="left")
     cand["ev"] = cand["fair"] * cand["price"] - 1
-    bets = cand[cand["ev"] > min_ev].sort_values("observed_at")
+    sane = ((cand["fair"] - cand["consensus"]).abs() <= MAX_GAP) & (cand["ev"] <= MAX_EV)
+    bets = cand[sane & (cand["ev"] > min_ev)].sort_values("observed_at")
     bets = bets.drop_duplicates([*FIXTURE, "market", "outcome", "bookmaker"], keep="first")
     close = fair.sort_values("observed_at").drop_duplicates(
         [*FIXTURE, "market", "outcome"], keep="last"
@@ -91,6 +121,14 @@ def update_bets(
     its closing price. Once kicked off and with a result it is settled at 1 unit:
     ``results`` is the season's fixtures: home_team, away_team, home_goals, away_goals."""
     cur = current.copy()
+    if cur.empty:
+        cols = [*BET_KEY, "observed_at", "price", "fair", "ev", "close_at", "fair_close", "clv"]
+        cur = pd.DataFrame(columns=cols)
+    if not stored.empty:
+        # bets that no longer pass the rules (e.g. logged before a data guard) are dropped;
+        # every snapshot is re-read each run, so ``current`` is the complete set
+        keep = stored.set_index(BET_KEY).index.isin(cur.set_index(BET_KEY).index)
+        stored = stored[keep]
     if stored.empty:
         new = cur
         book = cur

@@ -84,3 +84,42 @@ def test_bets_are_kept_as_first_seen_closed_and_settled() -> None:
     assert b["settled"] and b["won"] == 1 and np.isclose(b["profit"], 12.0)
     s = summary(book2, n_boot=50)
     assert s["bets"] == 1 and np.isclose(s["roi"], 12.0) and np.isclose(s["mean_clv"], b["clv"])
+
+
+def test_broken_exchange_quotes_make_no_bets() -> None:
+    # one-sided exchange quotes (implied 230 %), as seen for Forest v Arsenal a week out
+    t1 = KO - pd.Timedelta(days=7)
+    odds = pd.DataFrame(
+        [*rows("betfair_ex_uk", t1, (1.30, 1.15, 1.50)), *rows("skybet", t1, (5.5, 3.9, 1.6))]
+    )
+    assert live_consensus(odds).empty
+
+
+def test_anchor_far_from_the_soft_consensus_is_a_data_error_not_an_edge() -> None:
+    from fplh.delivery.live_consensus import MAX_EV, MAX_GAP
+
+    t1 = KO - pd.Timedelta(days=2)
+    anchor, soft = (1.75, 3.9, 4.8), (2.0, 3.6, 3.9)
+    odds = pd.DataFrame([*rows("betfair_ex_uk", t1, anchor), *rows("skybet", t1, soft)])
+    fair = devig(np.array(anchor), "power")[0]
+    consensus = (1 / 2.0) / sum(1 / np.array(soft))
+    assert 0.03 < 2.0 * fair - 1 <= MAX_EV and abs(fair - consensus) > MAX_GAP
+    assert live_consensus(odds).empty
+
+
+def test_stored_bets_that_fail_the_rules_are_dropped() -> None:
+    from fplh.delivery.live_consensus import update_bets
+
+    t1 = KO - pd.Timedelta(days=2)
+    good = live_consensus(
+        pd.DataFrame(
+            [*rows("betfair_ex_uk", t1, (1.30, 6.0, 11.0)), *rows("skybet", t1, (1.28, 5.5, 13.0))]
+        )
+    )
+    junk = good.assign(bookmaker="betway", outcome="draw", ev=1.4)
+    stored = pd.concat([good, junk], ignore_index=True).assign(settled=False)
+    results = pd.DataFrame(columns=["home_team", "away_team", "home_goals", "away_goals"])
+    new, book = update_bets(stored, good, results, t1)
+    assert new.empty and list(book["bookmaker"]) == ["skybet"]
+    _, book = update_bets(stored, pd.DataFrame(), results, t1)
+    assert book.empty

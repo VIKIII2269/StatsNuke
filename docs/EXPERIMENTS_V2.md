@@ -80,6 +80,7 @@ Measured once, on the same 80,973 player-fixtures and 110 gameweek blocks as the
 | B6 | Betfair exchange as the venue (AH) | CLV | No edge | ❌ |
 | B8 | **Betfair exchange as the fair-price anchor** (live has no Pinnacle in the UK region) | CLV 2022/23–2024/25 (exchange prices start 2022/23) | EV > 3 %: +2.9 % [+1.3, +4.5], n = 22. EV > 2 %: +1.7 % [+0.5, +2.8], n = 51. Market average anchor on 2016/17–2021/22: +2.9 % [+1.6, +4.3] | ✅ live anchor |
 | B7 | **Live consensus tracker** (`fplh evaluate live-ledger`) over The Odds API snapshots (21 UK books) | Paper CLV as snapshots accrue | First 3 snapshots: 3 paper bets (Crystal Palace away at 5.5 at Brighton, EV +4.3 %), CLV so far +2.9 % (not yet against the close) | ⏳ forward test |
+| B7a | **Exchange data guards** (live, 10 Oct) | Audit of the first 120 paper bets | A week out, Betfair's thin market quoted Forest 1.30 / draw 1.15 / Arsenal 1.50 (implied 230 %): 116 of 120 bets had EV above 15 % (up to +334 %). After the fix 4 remain (Brighton v Palace away at 5.5 at three books, Man City v Ipswich away at 12.5). Now: anchor quotes only when their implied sum is 97–106 %, the anchor's fair probability within 6 pp of the soft books' median, EV ≤ 15 %; stored bets that fail are dropped | ✅ fix |
 
 ## Incidents
 

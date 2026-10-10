@@ -247,7 +247,7 @@ def team_section(team: LiveTeam | None, pm: pd.DataFrame) -> list[dict[str, Any]
     out = []
     for key, w in sorted(team.weeks.items(), key=lambda kv: int(kv[0])):
         gw = int(key)
-        week = {"gw": gw, **{k: v for k, v in w.items() if k != "squad"}}
+        week = {"gw": gw, **{k: v for k, v in w.items() if k not in ("squad", "state_before")}}
         if "points" in w:
             rows = pm[pm["round"] == gw]
             pts = rows.groupby("player_uid")["total_points"].sum()
@@ -427,6 +427,7 @@ def build(
     made: str | None = None
     if next_gw is not None and weeks.get(str(next_gw), {}).get("advised"):
         plan = {"gameweek": next_gw, "provisional": False, **weeks[str(next_gw)]}
+        plan.pop("state_before", None)
         pred = _read(lake, FORECAST_KEY.format(season=season, gw=next_gw))
         made = str(plan["advised"])
     elif lake.exists(NEXT_KEY.format(season=season)):
