@@ -1,0 +1,16 @@
+{
+  "bytes": 474577,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "event-live",
+  "http_status": 200,
+  "observed_at": "2026-10-13T17:06:48Z",
+  "observed_at_us": "2026-10-13T17:06:48.359629+00:00",
+  "params": {
+    "gw": "6"
+  },
+  "response_headers": {},
+  "sha256": "0793d3cb442bb7dd3e1043d001e9801bbea5a3057bdf03c8b0f03dec8cea9661",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/event/6/live/"
+}

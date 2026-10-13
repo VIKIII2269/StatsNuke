@@ -1,0 +1,16 @@
+{
+  "bytes": 11220,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "element-summary",
+  "http_status": 200,
+  "observed_at": "2026-10-13T17:12:06Z",
+  "observed_at_us": "2026-10-13T17:12:06.359979+00:00",
+  "params": {
+    "element": "636"
+  },
+  "response_headers": {},
+  "sha256": "b1bde9a586eb1dc3af9d7e230583f688f92eb0d2966e886cc94041789c21c6b7",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/element-summary/636/"
+}
