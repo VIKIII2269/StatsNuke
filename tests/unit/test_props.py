@@ -113,3 +113,40 @@ def test_log_loss_with_a_walk_forward_margin() -> None:
     # GW7's margin is learned from GW6 only: 1 goal / (0.5 + 0.2) implied
     assert np.isclose(rows.loc[rows["fixture_uid"] == "f2", "c"].iloc[0], 1 / 0.7)
     assert np.isclose(rows["ours"].iloc[0], 0.5)  # 0.4 / 0.8, given that he plays
+
+
+def test_odds_snapshots_keep_pre_match_prices_only(tmp_path: Path) -> None:
+    """The odds endpoint also lists matches in play; a snapshot taken after one kicked
+    off (Liverpool v Man City, 11 Oct) failed the silver build until these were dropped."""
+    from fplh.lake.silver.odds_api import normalise
+
+    lake = Lake(str(tmp_path))
+
+    def event(kickoff: str, home: str, away: str) -> dict[str, object]:
+        outcomes = [{"name": home, "price": 2.0}, {"name": away, "price": 3.5}]
+        outcomes.append({"name": "Draw", "price": 3.4})
+        return {
+            "commence_time": kickoff,
+            "home_team": home,
+            "away_team": away,
+            "bookmakers": [{"key": "skybet", "markets": [{"key": "h2h", "outcomes": outcomes}]}],
+        }
+
+    payload = [
+        event("2026-10-11T15:30:00Z", "Liverpool", "Manchester City"),  # in play
+        event("2026-10-12T19:00:00Z", "Coventry City", "Newcastle United"),
+    ]
+    write_bronze(
+        lake,
+        BronzeRecord(
+            "odds_api",
+            "odds",
+            "u",
+            200,
+            datetime(2026, 10, 11, 16, 0, tzinfo=UTC),
+            json.dumps(payload).encode(),
+            {"sport": "soccer_epl"},
+        ),
+    )
+    out = normalise(lake, TeamResolver.from_config())
+    assert len(out) == 3 and (out["observed_at"] <= out["kickoff_at"]).all()
