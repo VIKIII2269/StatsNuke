@@ -800,6 +800,32 @@ def evaluate_v2_cmd(
             typer.echo(frame.round(4).to_string(index=False))
 
 
+@evaluate_app.command("assists")
+def evaluate_assists_cmd(
+    forecasts: Annotated[
+        list[str], typer.Option("--forecasts", help="v2 horizon-1 forecast parquet files or dirs.")
+    ],
+    tune: Annotated[str, typer.Option(help="Tuning season.")] = "2021-22",
+    test: Annotated[list[str] | None, typer.Option("--test", help="Test seasons.")] = None,
+) -> None:
+    """Model v2.1: assists from chance creation against v2 (experiment P5.9)."""
+    import pandas as pd
+
+    from fplh.evaluate.assists import evaluate_assists, read_forecasts
+    from fplh.features.information_set import SilverStore
+
+    lake = Lake(get_settings().lake_uri)
+    res = evaluate_assists(
+        SilverStore(lake),
+        read_forecasts(forecasts),
+        tune,
+        tuple(test or ["2022-23", "2023-24", "2024-25"]),
+    )
+    with pd.option_context("display.width", 200):
+        for frame in (res.deviance, res.tuning, res.test):
+            typer.echo(frame.round(4).to_string(index=False))
+
+
 @evaluate_app.command("ledger")
 def evaluate_ledger_cmd(
     season: Annotated[list[str], typer.Option("--season", help="Tuning seasons, e.g. 2022-23.")],

@@ -111,6 +111,7 @@ uv run fplh live score                      # score finalised gameweeks vs the a
 uv run fplh live bets                       # consensus-value paper book (paper only)
 uv run fplh evaluate v2 --season 2022-23 --season 2023-24 --season 2024-25 \
     --train-from 2019-20 --train-from 2020-21 --train-from 2021-22             # model v2 vs v1
+uv run fplh evaluate assists --forecasts lake/gold/pred_player/run_id=<v2 h1 run>  # v2.1 vs v2
 
 # Phase 6b: the Stats Nuke website (web/, setup in web/README.md)
 uv run fplh live plan-next                  # provisional plan for the next deadline

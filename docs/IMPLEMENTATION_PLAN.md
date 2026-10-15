@@ -894,3 +894,22 @@ and data live in a free Supabase project (setup: `web/README.md`).
 - **Current-season history.** Live now refreshes the current season's vaastav,
   football-data and Understat files on every run. The history cache had frozen them at
   its first build.
+
+### 7.3 Model v2.1: assists from chance creation (built)
+
+Experiment P5.9 showed a chance-creation model predicts FPL assists better than v2's share
+of team goals.
+
+- **Model** (`models/chances.py`):
+  - trained on Understat appearances since 2014/15 (XGBoost, Tweedie) to predict xA per
+    appearance;
+  - 37 features: each player's and team's state after their last match strictly before
+    the deadline (rolling xG/xA/shots/key passes/xG chain per 90, minutes and start shares,
+    team xG and opponent xGA, home).
+- **Forecast:** rate × v2's P(play) × an FPL-assists-per-xA scale. It is blended 75 %
+  into v2's assists, and expected points move by 3 × the change.
+- **Test** (`fplh evaluate assists`): points MSE on 2022/23–2024/25, all player-fixtures,
+  3.536 → 3.525, −0.011 [−0.015, −0.008]. The weight was chosen on 2021/22.
+- **Goals stay with v2**, which predicts them better.
+- **Live:** `live.team.forecast` applies it at every deadline; the model is refitted each
+  time, about 10 s. Stored forecasts keep v2's assists as `e_assists_v2`.
