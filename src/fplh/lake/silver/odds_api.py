@@ -23,6 +23,8 @@ def normalise(lake: Lake, teams: TeamResolver) -> pd.DataFrame:
         obs = pd.Timestamp(meta["observed_at_us"])
         for ev in json.loads(payload):
             kickoff = pd.Timestamp(ev["commence_time"])
+            if obs > kickoff:
+                continue  # the endpoint also lists matches in play: pre-match prices only
             start = kickoff.year if kickoff.month >= 7 else kickoff.year - 1
             home, away = teams.uid(ev["home_team"]), teams.uid(ev["away_team"])
             for book in ev.get("bookmakers", []):
@@ -79,6 +81,8 @@ def normalise_props(lake: Lake, teams: TeamResolver) -> pd.DataFrame:
         if not isinstance(ev, dict) or "home_team" not in ev:
             continue
         kickoff = pd.Timestamp(ev["commence_time"])
+        if obs > kickoff:
+            continue  # in play
         start = kickoff.year if kickoff.month >= 7 else kickoff.year - 1
         home, away = teams.uid(ev["home_team"]), teams.uid(ev["away_team"])
         season = season_label(start)
