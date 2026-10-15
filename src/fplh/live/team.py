@@ -2,7 +2,8 @@
 
 A fresh team starts at the first deadline it sees with £100m and unlimited transfers (as
 the season replay does) and then plays by the rules: at each deadline
-``advise`` forecasts the next five gameweeks with model v2 (the news-aware simulator over
+``advise`` forecasts the next five gameweeks with model v2.1 (v2 with assists from
+chance creation) (the news-aware simulator over
 the fused team rates at that deadline), solves the week with the same optimiser as the
 replay (``optimize.step``) at the live prices, and stores the picks. After the gameweek is
 final, ``score`` scores the stored picks with the official rules (auto-subs, captaincy,
@@ -110,10 +111,14 @@ def market_state(store: SilverStore, season: str, at: pd.Timestamp) -> pd.DataFr
 
 
 def forecast(lake: Lake, store: SilverStore, deadline: pd.Timestamp) -> pd.DataFrame:
-    """Model v2 at one deadline: per player-fixture expected points for five gameweeks."""
+    """Model v2.1 at one deadline: per player-fixture expected points for five gameweeks.
+    The v2 simulator, with assists blended toward the chance-creation model
+    (``models.chances``, experiment P5.9)."""
+    from fplh.models.chances import adjust
+
     sim = simulator(lake, store, [deadline], N_SIMS, HORIZON, minutes="news")
     out: pd.DataFrame = run(lake, store, sim, [deadline], HORIZON)
-    return out
+    return adjust(out, store, deadline)
 
 
 def expected_by_gameweek(
@@ -346,6 +351,8 @@ FORECAST_COLUMNS = (
     "deadline_at",
     "horizon",
     "expected_points",
+    "e_assists",
+    "e_assists_v2",
     "p_start",
     "p_play",
     "p_goal",
