@@ -26,6 +26,7 @@
  "weeks": {
   "6": {
    "advised": "2026-10-06T19:29:55.875342+00:00",
+   "average": 58,
    "bank": 2,
    "bench": [
     "fpl:200720",
@@ -72,7 +73,10 @@
    },
    "expected_points": 60.11,
    "free_transfers_before": 15,
+   "gross": 52,
+   "highest": 131,
    "hits": 0,
+   "points": 52,
    "sells": [],
    "squad": [
     "fpl:154561",
@@ -91,6 +95,7 @@
     "fpl:483067",
     "fpl:586309"
    ],
+   "substitutions": [],
    "vice": "fpl:446008",
    "xi": [
     "fpl:154561",
