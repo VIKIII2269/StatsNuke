@@ -1,0 +1,23 @@
+{
+  "bytes": 7191,
+  "collector_version": "0.1.0",
+  "content_type": "application/json; charset=utf-8",
+  "endpoint": "event_odds",
+  "http_status": 200,
+  "observed_at": "2026-10-17T11:12:19Z",
+  "observed_at_us": "2026-10-17T11:12:19.088136+00:00",
+  "params": {
+    "event": "764e6513cb3f348881503df70ccb90e0",
+    "markets": "player_goal_scorer_anytime",
+    "plan": "props",
+    "sport": "soccer_epl"
+  },
+  "response_headers": {
+    "x-requests-last": "1",
+    "x-requests-remaining": "377",
+    "x-requests-used": "123"
+  },
+  "sha256": "019d489fa7427461d46276b4fd6bbacbc75b8988f4195385d46b5eb8e9eedcb8",
+  "source": "odds_api",
+  "url": "https://api.the-odds-api.com/v4/sports/soccer_epl/events/764e6513cb3f348881503df70ccb90e0/odds?apiKey=REDACTED&regions=us&markets=player_goal_scorer_anytime&oddsFormat=decimal&dateFormat=iso"
+}
