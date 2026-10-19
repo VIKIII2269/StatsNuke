@@ -1,0 +1,16 @@
+{
+  "bytes": 29659,
+  "collector_version": "0.1.0",
+  "content_type": "text/csv",
+  "endpoint": "E0",
+  "http_status": 200,
+  "observed_at": "2026-10-19T16:37:49Z",
+  "observed_at_us": "2026-10-19T16:37:49.907935+00:00",
+  "params": {
+    "season": "2627"
+  },
+  "response_headers": {},
+  "sha256": "6731e95dd7120f5c7dc9f37650cc11ccccda8e7e0a3626830263c2cd77daa787",
+  "source": "football_data",
+  "url": "https://football-data.co.uk/mmz4281/2627/E0.csv"
+}
