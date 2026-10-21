@@ -1,0 +1,16 @@
+{
+  "bytes": 474148,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "event-live",
+  "http_status": 200,
+  "observed_at": "2026-10-21T14:38:28Z",
+  "observed_at_us": "2026-10-21T14:38:28.050368+00:00",
+  "params": {
+    "gw": "7"
+  },
+  "response_headers": {},
+  "sha256": "beafd83be9f08c0ce7f4a4933b7800d7c583e1503f6103ad4e5cd1d31464cbcc",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/event/7/live/"
+}
