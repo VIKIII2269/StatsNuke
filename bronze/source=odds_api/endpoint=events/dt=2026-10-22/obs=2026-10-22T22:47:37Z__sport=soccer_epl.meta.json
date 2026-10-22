@@ -1,0 +1,20 @@
+{
+  "bytes": 3790,
+  "collector_version": "0.1.0",
+  "content_type": "application/json; charset=utf-8",
+  "endpoint": "events",
+  "http_status": 200,
+  "observed_at": "2026-10-22T22:47:37Z",
+  "observed_at_us": "2026-10-22T22:47:37.290743+00:00",
+  "params": {
+    "sport": "soccer_epl"
+  },
+  "response_headers": {
+    "x-requests-last": "0",
+    "x-requests-remaining": "318",
+    "x-requests-used": "182"
+  },
+  "sha256": "a3cd4ec5bacda668837c679085596f2bbe86d47b07c37083a5712b30bd76e4cc",
+  "source": "odds_api",
+  "url": "https://api.the-odds-api.com/v4/sports/soccer_epl/events?apiKey=REDACTED"
+}
