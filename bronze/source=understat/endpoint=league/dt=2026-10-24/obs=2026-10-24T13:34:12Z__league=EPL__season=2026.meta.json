@@ -1,0 +1,17 @@
+{
+  "bytes": 288699,
+  "collector_version": "0.1.0",
+  "content_type": "text/javascript;charset=UTF-8",
+  "endpoint": "league",
+  "http_status": 200,
+  "observed_at": "2026-10-24T13:34:12Z",
+  "observed_at_us": "2026-10-24T13:34:12.042371+00:00",
+  "params": {
+    "league": "EPL",
+    "season": "2026"
+  },
+  "response_headers": {},
+  "sha256": "2b6256c90eb44a217b1e8d66b098d073f278c5bf22fbe03a6cb78adf1d447805",
+  "source": "understat",
+  "url": "https://understat.com/getLeagueData/EPL/2026"
+}
