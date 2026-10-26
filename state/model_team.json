@@ -212,6 +212,7 @@
   },
   "8": {
    "advised": "2026-10-23T13:36:31.578436+00:00",
+   "average": 45,
    "bank": 1,
    "bench": [
     "fpl:200720",
@@ -244,7 +245,10 @@
    },
    "expected_points": 56.32,
    "free_transfers_before": 1,
+   "gross": 50,
+   "highest": 120,
    "hits": 0,
+   "points": 50,
    "revision": 6,
    "sells": [
     "fpl:223340"
@@ -289,6 +293,12 @@
      "fpl:586309": 57
     }
    },
+   "substitutions": [
+    [
+     "fpl:220237",
+     "fpl:483067"
+    ]
+   ],
    "vice": "fpl:466075",
    "xi": [
     "fpl:154561",
