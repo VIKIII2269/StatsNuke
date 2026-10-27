@@ -1,0 +1,16 @@
+{
+  "bytes": 39739,
+  "collector_version": "0.1.0",
+  "content_type": "text/javascript;charset=UTF-8",
+  "endpoint": "match",
+  "http_status": 200,
+  "observed_at": "2026-10-27T15:31:51Z",
+  "observed_at_us": "2026-10-27T15:31:51.480814+00:00",
+  "params": {
+    "match": "31256"
+  },
+  "response_headers": {},
+  "sha256": "c641c88d64d1240da262ede6de99672044e11896c4cefd6f0880759baf12531a",
+  "source": "understat",
+  "url": "https://understat.com/getMatchData/31256"
+}
