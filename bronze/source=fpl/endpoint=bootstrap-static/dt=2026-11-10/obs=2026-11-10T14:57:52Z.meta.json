@@ -1,0 +1,14 @@
+{
+  "bytes": 1797273,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "bootstrap-static",
+  "http_status": 200,
+  "observed_at": "2026-11-10T14:57:52Z",
+  "observed_at_us": "2026-11-10T14:57:52.398524+00:00",
+  "params": {},
+  "response_headers": {},
+  "sha256": "54b6480d57890488de88dbedbf153737dd0f2e9c822014799fa16e33676f1b11",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/bootstrap-static/"
+}
