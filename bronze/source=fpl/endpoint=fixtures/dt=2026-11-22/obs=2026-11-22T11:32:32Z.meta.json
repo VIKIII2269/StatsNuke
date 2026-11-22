@@ -1,0 +1,14 @@
+{
+  "bytes": 362296,
+  "collector_version": "0.1.0",
+  "content_type": "application/json",
+  "endpoint": "fixtures",
+  "http_status": 200,
+  "observed_at": "2026-11-22T11:32:32Z",
+  "observed_at_us": "2026-11-22T11:32:32.065405+00:00",
+  "params": {},
+  "response_headers": {},
+  "sha256": "79e9dd6ffd78e1a237fc3e370e1dd186f2fa0747bf2d91f412b06c61089c0f63",
+  "source": "fpl",
+  "url": "https://fantasy.premierleague.com/api/fixtures/"
+}
